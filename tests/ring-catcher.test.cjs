@@ -40,7 +40,7 @@ function harness() {
   const context = {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
-    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null,
+    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelType:()=>1,
     ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
@@ -552,4 +552,18 @@ test('sling cannot release while emergency catch priority is active', () => {
   const R=94,cx=100,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
   const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
   assert.equal(h.tryReleaseRingSling(focus,contact,true),false);
+});
+
+
+test('ring Auto pipeline locks sensor, state, planner and sling to the same focus ball', () => {
+  assert.match(html,/const ringFocus=autoPilot\?selectAutoFocusBall\(\):ball/);
+  assert.match(html,/updateRingSensor\(dt,ringFocus\)/);
+  assert.match(html,/updateRingSling\(dt,ringFocus\)/);
+  assert.match(html,/updateRingPlanner\(dt,ringFocus\)/);
+});
+
+test('ring skills and sling do not override special-level Auto routing', () => {
+  assert.match(extractFunction('beginRingSling'),/levelType\(\)!==1/);
+  assert.match(extractFunction('updateRingSling'),/levelType\(\)!==1/);
+  assert.match(extractFunction('autoTargetX'),/levelType\(\)===1/);
 });

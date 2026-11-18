@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState', 'ringContact'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -44,8 +44,8 @@ function harness() {
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
     hitFx: null,
-    ringMoodEvent: () => {}, ringMoodRandom: () => .5, beep: () => {},
-    bouncePaddle: (o, y, isMain, n) => { const dot=o.vx*n.x+o.vy*n.y; if(dot<0){o.vx-=2*dot*n.x;o.vy-=2*dot*n.y;} },
+    ringMoodEvent: () => {}, ringMoodRandom: () => .5, beep: () => {}, particles: [], autoPilot: false,
+    curse: {drunkT:0,friction:0}, PADDLE_MAX_V:900, FRICTION:.02, FRICTION_CAP:.3,
     baseSpeed: () => 300,
     ringSensor: {
       valid: false, speed: 0, speedRatio: 0, speedClass: 'stopped', acceleration: 0,

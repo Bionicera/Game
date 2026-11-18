@@ -259,7 +259,7 @@
     vx:0,vy:0,direction:0,radialDistance:0,radialVelocity:0,angle:Math.PI/2,
     innerClearance:0,outerClearance:0,radialZone:'inside',
     gapHalfClearance:0,gapEta:null,gapPredictedX:null,gapOffset:null,gapPassable:false,
-    etaInner:null,etaOuter:null,nextWall:null,kineticIndex:0,updatedAt:0,previousSpeed:null
+    etaInner:null,etaOuter:null,nextWall:null,kineticIndex:0,updatedAt:0,previousSpeed:null,previousObject:null
   };
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
@@ -584,7 +584,7 @@
   function updateRingSensor(dt,o){
     if(shape!=='ring'||!o){
       if(shape!=='ring'){
-        ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.acceleration=0;
+        ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;ringSensor.acceleration=0;
         ringSensor.speed=0;ringSensor.speedRatio=0;ringSensor.speedClass='stopped';
       }
       return ringSensor;
@@ -593,7 +593,7 @@
     const dx=o.x-cx,dy=o.y-cy,radial=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
     const vx=o.vx||0,vy=o.vy||0,speedNow=Math.hypot(vx,vy),ratio=speedNow/Math.max(1,baseSpeed());
     let acceleration=ringSensor.acceleration||0;
-    if(dt>1e-4&&ringSensor.valid&&Number.isFinite(ringSensor.previousSpeed)){
+    if(dt>1e-4&&ringSensor.valid&&ringSensor.previousObject===o&&Number.isFinite(ringSensor.previousSpeed)){
       const measured=(speedNow-ringSensor.previousSpeed)/dt;
       acceleration=acceleration*.68+measured*.32;
     }else if(!ringSensor.valid) acceleration=0;
@@ -629,7 +629,7 @@
       vx,vy,direction:Math.atan2(vy,vx),radialDistance:radial,radialVelocity,angle,
       innerClearance,outerClearance,radialZone,gapHalfClearance,gapEta,gapPredictedX,gapOffset,gapPassable,
       etaInner,etaOuter,nextWall,kineticIndex:ratio*ratio,
-      updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:speedNow
+      updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:dt>1e-4?speedNow:ringSensor.previousSpeed,previousObject:dt>1e-4?o:ringSensor.previousObject
     };
     return ringSensor;
   }

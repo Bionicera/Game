@@ -685,7 +685,8 @@
           // 短冲距离只由目标方向/偏移决定；震荡次数只决定甩出速度，两者不互相串扰。
           const requestedDistance=clamp(RING_R()*(.12+.22*targetOffset),18,RING_R()*.34);
           ringSling.targetX=clamp(paddle.x+ringSling.dashDir*requestedDistance,2,W-paddle.w-2);
-          ringSling.dashDistance=Math.abs(ringSling.targetX-paddle.x);
+          // 只计算沿预定冲刺方向的实际行程；边界夹紧后不足 10px 就取消。
+          ringSling.dashDistance=(ringSling.targetX-paddle.x)*ringSling.dashDir;
           if(ringSling.dashDistance<10){
             ringSling.abortReason='边界行程不足';
             recordRingEvaluation('cancel',{skill:'sling',reason:ringSling.abortReason});
@@ -697,8 +698,11 @@
         }
       }
     }else if(ringSling.phase==='dash'){
-      ringSling.dashProgress=clamp(Math.abs(paddle.x-ringSling.dashStartX)/Math.max(1,ringSling.dashDistance),0,1);
-      if(ringSling.dashProgress>=.9||Math.abs(paddle.x-ringSling.targetX)<=5){
+      // 投影到冲刺方向，反向移动不再虚报进度。
+      const signedTravel=(paddle.x-ringSling.dashStartX)*ringSling.dashDir;
+      ringSling.dashProgress=clamp(signedTravel/Math.max(1,ringSling.dashDistance),0,1);
+      const reachedTarget=Math.abs(paddle.x-ringSling.targetX)<=5&&signedTravel>=0;
+      if(ringSling.dashProgress>=.9||reachedTarget){
         ringSling.phase='release';ringSling.releaseTimer=0;ringSling.phaseTime=0;
         advanceRingCombo('dash','单向短冲完成');
       }

@@ -14,11 +14,11 @@ function extractFunction(name) {
   let depth = 0, quote = null, lineComment = false, blockComment = false, escape = false;
   for (let i = open; i < html.length; i++) {
     const c = html[i], n = html[i + 1];
-    if (lineComment) { if (c === '\\n') lineComment = false; continue; }
+    if (lineComment) { if (c === '\n') lineComment = false; continue; }
     if (blockComment) { if (c === '*' && n === '/') { blockComment = false; i++; } continue; }
     if (quote) {
       if (escape) { escape = false; continue; }
-      if (c === '\\\\') { escape = true; continue; }
+      if (c === '\\') { escape = true; continue; }
       if (c === quote) quote = null;
       continue;
     }

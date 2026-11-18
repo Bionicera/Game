@@ -724,7 +724,7 @@ test('trajectory predictor rejects malformed physical observations before simula
     const h=harness();
     const result=h.predictRingTrajectory(ball,1.5);
     assert.equal(result.valid,false);
-    assert.deepEqual(result.events,[]);
+    assert.equal(result.events.length,0);
     assert.equal(result.simulatedTime,0);
   }
 });
@@ -737,7 +737,7 @@ test('RingSensor clears stale trajectory and gap observations when focus is abse
   assert.notEqual(h.sensor.gapPredictedX,null);
   const absent=h.updateRingSensor(.016,null);
   assert.equal(absent.valid,false);
-  assert.deepEqual(absent.trajectoryEvents,[]);
+  assert.equal(absent.trajectoryEvents.length,0);
   assert.equal(absent.gapPredictedX,null);
   assert.equal(absent.gapOffset,null);
   const invalid=h.updateRingSensor(.016,{x:NaN,y:420,vx:0,vy:0,r:8});

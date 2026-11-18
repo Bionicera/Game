@@ -271,6 +271,7 @@ test('sling skill is gated to Auto ring play and selects more cycles for low-spe
 test('sling performs alternating oscillations, then a one-way short dash and release window', () => {
   const h=harness();h.auto=true;
   const o={x:200,y:420,vx:60,vy:0,r:8};
+  h.sensor.valid=true;
   assert.equal(h.beginRingSling(o),true);
   const cycles=h.sling.cyclesTarget;
   for(let i=0;i<cycles*2;i++){
@@ -677,6 +678,7 @@ test('sling aborts cleanly when Auto is disabled or the game is paused', () => {
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'idle');
   h.auto=true;
+  h.sensor.valid=true;
   assert.equal(h.beginRingSling(focus),true);
   h.shape='rect';
   h.updateRingSling(.016,focus);

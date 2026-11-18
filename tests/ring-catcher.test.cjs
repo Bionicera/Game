@@ -507,3 +507,23 @@ test('RingPlanner keeps a higher-priority unload combo when the instantaneous sk
   h.updateRingPlanner(.016,focus);
   assert.equal(h.combo.name,'unload','control intent must not interrupt a higher-priority unload recipe');
 });
+
+
+test('RingPlanner emits bounded action requests with expiry and explicit acceptance', () => {
+  const h=harness(),focus={x:400,y:300,vx:0,vy:0,r:8};
+  h.auto=true;
+  h.updateRingSensor(0,focus);
+  h.updateRingState(h.sensor,0,focus);
+  const plan=h.updateRingPlanner(.016,focus);
+  assert.equal(plan.accepted,true);
+  assert.equal(plan.action.type,'hard-wall-boost');
+  assert.ok(Number.isFinite(plan.expiresAt)&&plan.expiresAt>0);
+  assert.ok(Number.isFinite(plan.action.targetX));
+});
+
+test('RingEvaluator counters saturate and cannot grow without bound', () => {
+  const h=harness();
+  h.evaluator.requested=1000000;
+  h.recordRingEvaluation('request',{skill:'stress'});
+  assert.equal(h.evaluator.requested,1000000);
+});

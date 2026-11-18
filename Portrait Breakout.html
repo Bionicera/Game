@@ -765,6 +765,7 @@
         vx=sn*nx+st*tx;vy=sn*ny+st*ty;
         const safe=Math.max(1,innerLimit-.8);
         x=cx+dx/radial*safe;y=cy+dy/radial*safe;
+        break; // 规划只需要首个物理事件；不把撞壁后的绕行误判为直接缺口通行。
       }else if(!inGap&&radialVelocity<0&&prevRad>outerLimit&&radial<=outerLimit){
         etaOuter=elapsed;addEvent('outer',elapsed,x,y);
         const nx=dx/radial,ny=dy/radial,vn=vx*nx+vy*ny;
@@ -773,6 +774,7 @@
         vx*=gain;vy*=gain;
         const safe=outerLimit+.8;
         x=cx+dx/radial*safe;y=cy+dy/radial*safe;
+        break;
       }
       prevRad=Math.hypot(x-cx,y-cy);
       if(etaInner!==null&&etaOuter!==null)break;

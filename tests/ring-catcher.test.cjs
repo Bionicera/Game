@@ -527,3 +527,29 @@ test('RingEvaluator counters saturate and cannot grow without bound', () => {
   h.recordRingEvaluation('request',{skill:'stress'});
   assert.equal(h.evaluator.requested,1000000);
 });
+
+
+test('emergency safe-catch plan overrides an active sling sequence', () => {
+  const h=harness();h.auto=true;
+  const focus={x:400,y:520,vx:0,vy:300,r:8};
+  h.beginRingSling(focus);
+  h.sling.phase='oscillate';
+  const sensor={valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'stable',gapEta:null,
+    gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'inside'};
+  const plan=h.planRingSkill(sensor,{intent:'aim'},focus);
+  assert.equal(plan.skill,'safe-catch');
+  h.planner.skill='safe-catch';
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'cooldown');
+});
+
+test('sling cannot release while emergency catch priority is active', () => {
+  const h=harness();h.auto=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  h.beginRingSling(focus);
+  h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;
+  h.planner.skill='safe-catch';
+  const R=94,cx=100,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+  const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
+  assert.equal(h.tryReleaseRingSling(focus,contact,true),false);
+});

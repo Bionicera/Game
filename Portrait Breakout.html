@@ -22,6 +22,74 @@
   #app{position:fixed;top:0;left:0;right:0;height:100vh;height:100dvh;overflow:hidden;background:#070b18}
   canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
 
+
+  /* 独立启动海报：只覆盖游戏入口，不参与游戏布局 */
+  #cover{position:absolute;inset:0;z-index:20;display:grid;place-items:center;overflow:hidden;
+    padding:calc(env(safe-area-inset-top,0px) + 24px) 22px calc(env(safe-area-inset-bottom,0px) + 24px);
+    background:radial-gradient(ellipse at 50% 42%,rgba(55,53,130,.62),transparent 48%),
+      radial-gradient(ellipse at 15% 18%,rgba(28,116,166,.32),transparent 38%),
+      radial-gradient(ellipse at 88% 76%,rgba(153,57,151,.28),transparent 42%),
+      linear-gradient(160deg,#050817 0%,#10132f 52%,#070a1b 100%);
+    color:#f8f3e8;font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;
+    transition:opacity .65s ease,visibility .65s ease}
+  #cover::before,#cover::after{content:"";position:absolute;inset:-30%;pointer-events:none}
+  #cover::before{opacity:.55;background-image:radial-gradient(1px 1px at 12% 18%,#fff 99%,transparent),
+    radial-gradient(1.5px 1.5px at 78% 13%,#d9eaff 99%,transparent),
+    radial-gradient(1px 1px at 66% 71%,#fff 99%,transparent),
+    radial-gradient(1.5px 1.5px at 22% 82%,#ffe7bd 99%,transparent),
+    radial-gradient(1px 1px at 91% 55%,#fff 99%,transparent),
+    radial-gradient(1px 1px at 42% 35%,#d7d9ff 99%,transparent);
+    background-size:310px 290px,370px 330px,280px 360px,420px 390px,330px 310px,390px 360px}
+  #cover::after{inset:auto;width:min(88vw,440px);height:min(88vw,440px);border-radius:50%;
+    background:conic-gradient(from 20deg,rgba(93,210,255,.08),rgba(255,132,211,.18),rgba(255,220,143,.12),rgba(93,210,255,.08));
+    filter:blur(38px);transform:translateY(-5%)}
+  #cover.dismissed{opacity:0;visibility:hidden;pointer-events:none}
+  .cover-poster{position:relative;z-index:1;width:min(100%,430px);min-height:min(780px,calc(100dvh - 48px));
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;text-align:center;
+    padding:clamp(24px,6vh,54px) 12px clamp(22px,4vh,36px)}
+  .cover-kicker{font-size:10px;letter-spacing:.42em;color:#b9c7e8;text-transform:uppercase}
+  .cover-title{margin:18px 0 8px;font-family:Georgia,"Times New Roman",serif;font-size:clamp(37px,10vw,58px);
+    line-height:1.04;letter-spacing:.035em;font-weight:600;
+    color:#fff8e9;text-shadow:0 2px 2px rgba(255,255,255,.25),0 0 22px rgba(255,218,165,.28),0 0 48px rgba(143,153,255,.38)}
+  .cover-subtitle{font-size:12px;letter-spacing:.36em;color:#d9d5d4}
+  .cover-rule{width:76px;height:1px;margin:22px auto 0;background:linear-gradient(90deg,transparent,#f4d9ad,transparent)}
+  .cover-art{position:relative;width:100%;height:clamp(235px,37vh,330px);margin:5px 0 4px;display:grid;place-items:center}
+  .cover-nebula{position:absolute;width:88%;height:80%;border-radius:50%;
+    background:radial-gradient(ellipse,rgba(115,105,224,.27),rgba(47,125,185,.13) 42%,transparent 72%);
+    filter:blur(12px)}
+  .cover-orbit{position:absolute;width:86%;height:42%;border:1px solid rgba(190,205,255,.28);border-radius:50%;
+    transform:rotate(-17deg);box-shadow:0 0 18px rgba(123,176,255,.12)}
+  .cover-orbit.two{width:72%;height:60%;transform:rotate(58deg);border-color:rgba(255,204,224,.2)}
+  .cover-bricks{position:relative;width:min(88%,330px);display:grid;grid-template-columns:repeat(6,1fr);gap:7px;
+    transform:perspective(500px) rotateX(-13deg) rotateZ(-5deg);filter:drop-shadow(0 14px 18px rgba(0,0,0,.25))}
+  .cover-bricks i{height:clamp(15px,3.1vh,23px);border-radius:5px;border:1px solid rgba(255,255,255,.48);
+    box-shadow:inset 0 2px 4px rgba(255,255,255,.48),0 0 13px currentColor}
+  .cover-bricks i:nth-child(6n+1){background:linear-gradient(145deg,#ffb7c9,#ed6597);color:#ff91bd}
+  .cover-bricks i:nth-child(6n+2){background:linear-gradient(145deg,#ffd99b,#f2a64c);color:#ffc477}
+  .cover-bricks i:nth-child(6n+3){background:linear-gradient(145deg,#fff0a8,#d6cf62);color:#f5e78d}
+  .cover-bricks i:nth-child(6n+4){background:linear-gradient(145deg,#a9f0d4,#4bbf9d);color:#7be6c2}
+  .cover-bricks i:nth-child(6n+5){background:linear-gradient(145deg,#a9ddff,#579de9);color:#80c7ff}
+  .cover-bricks i:nth-child(6n){background:linear-gradient(145deg,#d8bcff,#9872e8);color:#c3a1ff}
+  .cover-bricks i:nth-child(1),.cover-bricks i:nth-child(6),.cover-bricks i:nth-child(7),.cover-bricks i:nth-child(12){opacity:.28}
+  .cover-ball{position:absolute;width:15px;height:15px;left:53%;top:67%;border-radius:50%;
+    background:radial-gradient(circle at 32% 28%,#fff 0 12%,#fff5cb 28%,#ffc978 62%,#e887ff 100%);
+    box-shadow:0 0 10px #fff,0 0 24px #ffc5e7,0 0 52px rgba(255,163,215,.7)}
+  .cover-paddle{position:absolute;left:50%;bottom:12%;width:37%;height:10px;transform:translateX(-50%);
+    border-radius:99px;background:linear-gradient(90deg,#8ddcff,#fff,#9db7ff);
+    box-shadow:0 0 12px #8bdcff,0 0 28px rgba(114,183,255,.7)}
+  .cover-spark{position:absolute;color:#fff2c9;text-shadow:0 0 12px #fff,0 0 25px #a8c9ff;font-size:19px}
+  .cover-spark.a{top:16%;left:17%}.cover-spark.b{right:14%;top:30%;font-size:14px}.cover-spark.c{bottom:19%;left:22%;font-size:12px}
+  .cover-bottom{display:flex;flex-direction:column;align-items:center;gap:15px;width:100%}
+  .cover-tagline{font-size:12px;letter-spacing:.22em;color:#d5d9ef}
+  #btnEnter{min-width:190px;padding:14px 34px;border:1px solid rgba(255,235,202,.78);border-radius:999px;
+    color:#fff8e9;background:linear-gradient(120deg,rgba(116,147,218,.28),rgba(199,131,190,.24));
+    box-shadow:0 0 22px rgba(143,170,255,.22),inset 0 1px rgba(255,255,255,.22);
+    font-size:13px;font-weight:650;letter-spacing:.28em;cursor:pointer;backdrop-filter:blur(10px)}
+  #btnEnter:active{transform:scale(.97);background:rgba(178,177,255,.3)}
+  .cover-footnote{font-size:9px;letter-spacing:.2em;color:rgba(196,207,232,.55)}
+  @media(max-height:650px){.cover-poster{padding-top:12px;padding-bottom:10px}.cover-art{height:210px}
+    .cover-title{margin-top:10px}.cover-rule{margin-top:13px}.cover-bricks{gap:5px}}
+
   /* HUD 浮在画布上，不占布局高度，画面零留白 */
   #hud{position:absolute;left:0;right:0;top:0;z-index:3;pointer-events:none;
     padding:calc(env(safe-area-inset-top,0px) + 8px) calc(env(safe-area-inset-right,0px) + 10px) 0 calc(env(safe-area-inset-left,0px) + 10px);
@@ -101,6 +169,27 @@
 <body>
 <div id="app">
   <canvas id="game"></canvas>
+  <section id="cover" aria-label="Portrait Breakout 游戏封面">
+    <div class="cover-poster">
+      <div>
+        <div class="cover-kicker">A COSMIC ARCADE ADVENTURE</div>
+        <h1 class="cover-title">Portrait<br>Breakout</h1>
+        <div class="cover-subtitle">弹 起 星 光 · 击 碎 边 界</div>
+        <div class="cover-rule"></div>
+      </div>
+      <div class="cover-art" aria-hidden="true">
+        <div class="cover-nebula"></div><div class="cover-orbit"></div><div class="cover-orbit two"></div>
+        <span class="cover-spark a">✦</span><span class="cover-spark b">✧</span><span class="cover-spark c">✦</span>
+        <div class="cover-bricks"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="cover-ball"></div><div class="cover-paddle"></div>
+      </div>
+      <div class="cover-bottom">
+        <div class="cover-tagline">RAINBOW GALAXY · LEVEL 01</div>
+        <button id="btnEnter" type="button">开始游戏</button>
+        <div class="cover-footnote">MADE TO PLAY · MADE OF STARS</div>
+      </div>
+    </div>
+  </section>
 
   <div id="hud">
     <div class="row">
@@ -3457,6 +3546,22 @@
     draw();
     requestAnimationFrame(loop);
   }
+
+  const cover = $('cover');
+  const enterButton = $('btnEnter');
+  function enterGame(){
+    if(!cover || cover.classList.contains('dismissed')) return;
+    cover.classList.add('dismissed');
+    cover.setAttribute('aria-hidden','true');
+    firstLevelIntroT = 4.8;
+    setTimeout(() => { if(cover && cover.parentNode) cover.style.display = 'none'; }, 700);
+  }
+  enterButton.addEventListener('click', enterGame);
+  document.addEventListener('keydown', e => {
+    if(cover && !cover.classList.contains('dismissed') && (e.key === 'Enter' || e.key === ' ')){
+      e.preventDefault(); enterGame();
+    }
+  });
 
   resize();
   newLevel(false);

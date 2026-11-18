@@ -16,7 +16,7 @@ const { chromium } = require('playwright');
     snapshot(){
       return {shape,autoPilot,state,canvasWidth:canvas.width,canvasHeight:canvas.height,
         sling:{...ringSling},combo:{...ringCombo},planner:{...ringPlanner},sensor:{...ringSensor},
-        evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
+        evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball},time,lives,paddle:{...paddle}};
     },
     startLiveAuto(){
       shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';lives=20;

@@ -205,6 +205,7 @@
           <button class="shape" data-shape="moon" title="新月形挡板（凹面朝上）" aria-label="新月形挡板（凹面朝上）"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 7 Q20 39 38 7 Q20 18 2 7Z"/></svg></button>
           <button class="shape" data-shape="semicircle" title="半圆形挡板" aria-label="半圆形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 31A18 18 0 0 1 38 31Z"/></svg></button>
           <button class="shape" data-shape="triangle" title="等边三角形挡板" aria-label="等边三角形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3.3 36 31 4 31Z"/></svg></button>
+          <button class="shape" data-shape="ring" title="圆环挡板（顶部三球宽缺口）" aria-label="圆环挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3 A14 14 0 1 1 9.7 7.5 M20 9 A8 8 0 1 0 25.9 11.4" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/></svg></button>
         </div>
         <div class="tools auto-slot"><button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button></div>
       </div>
@@ -380,7 +381,7 @@
   let hitFx = null;           // 接球瞬间的方向指示
   let pointerDown = false, pointerId = null;
   // 挡板形状：一局内锁定，只有新开局（含重开）才能重新选
-  const SHAPES = ['rect', 'moon', 'semicircle', 'triangle'];
+  const SHAPES = ['rect', 'moon', 'semicircle', 'triangle', 'ring'];
   let shape = 'rect', shapeLocked = false;
   // 自动驾驶：自动发球 + 预测落点接球，全程不用碰屏幕
   let autoPilot = false, autoServeT = 0.5;
@@ -527,10 +528,14 @@
   const TRI_H = () => paddle.w * Math.sqrt(3) / 2;
   const SEMI_R = () => paddle.w / 2;
   const MOON_H = () => paddle.w * .34;
+  const RING_R = () => paddle.w * .47;
+  const RING_GAP_HALF = () => Math.asin(clamp((Math.max(1, ball.r * 3) / 2) / RING_R(), 0, .92));
+  const RING_WALL = () => Math.max(5, Math.min(paddle.h * .72, RING_R() * .22));
   function shapeBodyH(){
     if(shape === 'triangle') return TRI_H();
     if(shape === 'semicircle') return SEMI_R();
     if(shape === 'moon') return MOON_H();
+    if(shape === 'ring') return RING_R();
     return paddle.h;
   }
   // t ∈ [0,1] 为挡板上横向相对位置，返回该处「顶面」的绝对 y
@@ -543,6 +548,7 @@
       const h = MOON_H();
       return bottom - h + 2.88 * h * t * (1 - t);
     }
+    if(shape === 'ring') return bottom - RING_R() * (1 - Math.cos(RING_GAP_HALF()));
     const u = clamp(2 * t - 1, -1, 1);
     return bottom - SEMI_R() * Math.sqrt(Math.max(0, 1 - u * u));
   }
@@ -678,6 +684,41 @@
     o.y=contact.q.y+contact.n.y*(o.r+.6);
     const relAtContact=clamp((contact.q.x-pw/2)/(pw/2),-1,1);
     bouncePaddle(o,contact.q.y,isMain,contact.n,relAtContact);
+    return true;
+  }
+
+  // 开口圆环：内外圆弧都参与连续扫掠碰撞，顶部缺口保持真正开放。
+  function ringContact(o, prevX, prevY, isMain, paddleStartX, paddleEndX){
+    const pw=paddle.w, bottom=paddle.y+paddle.h, R=RING_R(), inner=R-RING_WALL();
+    const gap=RING_GAP_HALF(), start=-Math.PI/2+gap, end=3*Math.PI/2-gap;
+    const center={x:pw/2,y:bottom-R};
+    const arcHit=(x,y,r,kind)=>{
+      const dx=x-center.x,dy=y-center.y,ang=Math.atan2(dy,dx);
+      const a=ang < start ? start : (ang > end ? end : ang);
+      const q={x:center.x+r*Math.cos(a),y:center.y+r*Math.sin(a)};
+      const radial={x:Math.cos(a),y:Math.sin(a)};
+      const n=kind==='outer'?radial:{x:-radial.x,y:-radial.y};
+      const ox=x-q.x,oy=y-q.y;
+      return {q,n,dist:Math.hypot(ox,oy),signed:ox*n.x+oy*n.y,kind};
+    };
+    const travel=Math.hypot((o.x-prevX)-(paddleEndX-paddleStartX),o.y-prevY);
+    const steps=clamp(Math.ceil(travel/Math.max(1,o.r*.4)),1,256);
+    let contact=null;
+    for(let k=0;k<=steps;k++){
+      const f=k/steps,px=paddleStartX+(paddleEndX-paddleStartX)*f;
+      const cx=prevX+(o.x-prevX)*f-px,cy=prevY+(o.y-prevY)*f;
+      const hits=[arcHit(cx,cy,R,'outer'),arcHit(cx,cy,inner,'inner')];
+      for(const hit of hits){
+        const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y<-.01;
+        if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching&&(!contact||hit.dist<contact.dist)) contact={...hit,f};
+      }
+      if(contact) break;
+    }
+    if(!contact)return false;
+    const px=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
+    o.x=px+contact.q.x+contact.n.x*(o.r+.6);
+    o.y=contact.q.y+contact.n.y*(o.r+.6);
+    bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/(pw/2),-1,1));
     return true;
   }
 
@@ -2036,7 +2077,7 @@
     snapBall();                 // 立刻按新形状重新摆放球
     trail.length = 0; hitFx = null;
     syncUI();
-    toastMsg(({rect:'圆角矩形挡板', moon:'新月形挡板', semicircle:'半圆形挡板', triangle:'等边三角形挡板'})[next]);
+    toastMsg(({rect:'圆角矩形挡板', moon:'新月形挡板', semicircle:'半圆形挡板', triangle:'等边三角形挡板', ring:'U 型圆环挡板'})[next]);
     beep(620, .07, 'triangle', .05);
   });
 
@@ -2272,6 +2313,7 @@
 
     // 月牙必须区分内弧与外弧：内弧向上反弹，外弧向下反弹。
     if(shape === 'moon') moonContact(ball,px,py,true,paddleStartX,paddleEndX);
+    else if(shape === 'ring') ringContact(ball,px,py,true,paddleStartX,paddleEndX);
     else shapedPaddleContact(ball,px,py,true,paddleStartX,paddleEndX);
 
     // 弹珠台弹力柱与球袋碰撞。
@@ -2338,6 +2380,7 @@
       if(isFortressLevel()) collideFortressWalls(e, px, py);
 
       if(shape === 'moon') moonContact(e,px,py,false,paddleStartX,paddleEndX);
+      else if(shape === 'ring') ringContact(e,px,py,false,paddleStartX,paddleEndX);
       else shapedPaddleContact(e,px,py,false,paddleStartX,paddleEndX);
       if(isCurseLevel()){
         let bumperHit=false;
@@ -3531,6 +3574,13 @@
       ctx.quadraticCurveTo(pcx, bottom + h, px + pw, topY);
       ctx.quadraticCurveTo(pcx, bottom + .44 * h, px, topY);
       ctx.closePath();
+    } else if(shape === 'ring'){
+      const R=RING_R(),ri=R-RING_WALL(),gap=RING_GAP_HALF();
+      const cy=bottom-R,start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+      ctx.arc(pcx,cy,R,start,end,false);
+      ctx.lineTo(pcx+ri*Math.cos(end),cy+ri*Math.sin(end));
+      ctx.arc(pcx,cy,ri,end,start,true);
+      ctx.closePath();
     } else {
       roundRect(px, paddle.y, pw, paddle.h, paddle.h / 2);
     }
@@ -3544,6 +3594,10 @@
     if(shape === 'rect'){
       ctx.fillStyle = 'rgba(255,255,255,.55)';
       roundRect(px + pw * .3, paddle.y + 2, pw * .4, 2, 1); ctx.fill();
+    } else if(shape === 'ring'){
+      ctx.save(); ctx.strokeStyle='rgba(255,255,255,.72)'; ctx.lineWidth=1.5;
+      ctx.beginPath(); const R=RING_R(),ri=R-RING_WALL(),cy=bottom-R,gap=RING_GAP_HALF();
+      ctx.arc(pcx,cy,ri,-Math.PI/2+gap,3*Math.PI/2-gap,false); ctx.stroke(); ctx.restore();
     } else {
       ctx.fillStyle = 'rgba(255,255,255,.6)';
       ctx.beginPath(); ctx.arc(pcx, topY + 3, 2.2, 0, 6.283); ctx.fill();

@@ -15,7 +15,19 @@ const { chromium } = require('playwright');
   window.__ringTest = {
     snapshot(){
       return {shape,autoPilot,state,canvasWidth:canvas.width,canvasHeight:canvas.height,
-        sling:{...ringSling},ball:{...ball}};
+        sling:{...ringSling},combo:{...ringCombo},evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
+    },
+    plannerMatrix(){
+      const focus={x:paddle.x+paddle.w/2,y:paddle.y-100,vx:0,vy:120,r:ball.r};
+      const base={valid:true,speedRatio:.5,speedClass:'slow',speedTrend:'stable',gapEta:null,
+        gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'outside'};
+      const boost=planRingSkill(base,{intent:'boost'},focus).skill;
+      const capture=planRingSkill({...base,speedRatio:1.4,speedClass:'fast',etaInner:.2},{intent:'control'},focus).skill;
+      const gap=planRingSkill({...base,gapEta:.1,gapPassable:true,gapPredictedX:focus.x+20},{intent:'guide-through'},focus).skill;
+      const guide=planRingSkill({...base,speedRatio:1,speedClass:'cruise',radialZone:'inside'},{intent:'aim'},focus).skill;
+      const danger={...focus,y:paddle.y+paddle.h-30,vy:200};
+      const safe=planRingSkill(base,{intent:'boost'},danger).skill;
+      return {boost,capture,gap,guide,safe};
     },
     chooseRing(){
       shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
@@ -57,7 +69,8 @@ const { chromium } = require('playwright');
       o.x=paddle.x+qx+nx*(ball.r-.5);o.y=qy+ny*(ball.r-.5);
       o.vx=-nx*220;o.vy=-ny*220;
       const hit=ringContact(o,o.x,o.y,true,paddle.x,paddle.x);
-      return {hit,phase:ringSling.phase,vx:o.vx,vy:o.vy,speed:Math.hypot(o.vx,o.vy)};
+      return {hit,phase:ringSling.phase,vx:o.vx,vy:o.vy,speed:Math.hypot(o.vx,o.vy),
+        comboStep:ringCombo.steps[ringCombo.index],slingReleases:ringEvaluator.slingReleases};
     }
   };
 `;
@@ -70,6 +83,9 @@ const { chromium } = require('playwright');
     await page.setContent(html,{waitUntil:'load'});
     await page.waitForFunction(() => document.querySelector('#cover')?.classList.contains('dismissed'),null,{timeout:5000});
     await page.evaluate(() => window.__ringTest.chooseRing());
+    const skills=await page.evaluate(() => window.__ringTest.plannerMatrix());
+    assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'guide',safe:'safe-catch'},
+      'browser planner should arbitrate the complete base skill set');
     const capture=await page.evaluate(() => window.__ringTest.innerCapture());
     assert.equal(capture.hit,true,'production inner-wall collision should register');
     assert.equal(capture.phase,'oscillate','inner capture should enter the sling oscillation phase');
@@ -82,6 +98,8 @@ const { chromium } = require('playwright');
     assert.equal(release.phase,'cooldown','successful sling should enter cooldown');
     assert.ok(release.vx>0&&release.vy<0,'sling should exit upward through the selected gap tip');
     assert.ok(release.speed>0&&Number.isFinite(release.speed),'sling velocity should remain finite');
+    assert.equal(release.comboStep,'attack','sling combo should advance to attack after a confirmed release');
+    assert.equal(release.slingReleases,1,'evaluator should count the real release once');
     const canvas=await page.evaluate(() => ({
       width:document.querySelector('#game').width,
       height:document.querySelector('#game').height,

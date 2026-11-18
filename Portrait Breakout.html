@@ -623,6 +623,22 @@
     return true;
   }
 
+  // 任何有效主球内环接触都应接上甩球技能；不依赖易抖动的 RingState.intent。
+  // 生存接球优先，且只在 idle 时启动，避免冷却中重复请求/重置组合。
+  function beginRingSlingOnCapture(o,isMain){
+    if(!isMain||!autoPilot||shape!=='ring'||levelType()!==1||state!=='playing'||
+       ringPlanner.skill==='safe-catch'||ringSling.phase!=='idle')return false;
+    startRingCombo('sling',o);
+    if(beginRingSling(o)){
+      advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
+      return true;
+    }
+    ringCombo.index=Math.max(0,ringCombo.steps.length-1);
+    ringCombo.reason='甩球条件不足，安全回退';
+    recordRingEvaluation('cancel',{skill:'sling',reason:ringCombo.reason});
+    return false;
+  }
+
   // 状态推进只控制挡板目标位置；球仍由真实内壁碰撞和缺口端碰撞驱动。
   function updateRingSling(dt,focus){
     if(shape!=='ring'||levelType()!==1||!autoPilot||state!=='playing'||!focus||!ringSensor.valid){
@@ -1353,15 +1369,7 @@
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
         ringMoodEvent(ringMoodRandom()<.62?'😏':'🤓',1.25);
         beep(390,.045,'sine',.025);
-        if(isMain&&autoPilot&&ringState.intent==='aim'&&ringPlanner.skill!=='safe-catch'){
-          startRingCombo('sling',o);
-          if(beginRingSling(o))advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
-          else{
-            ringCombo.index=Math.max(0,ringCombo.steps.length-1);
-            ringCombo.reason='甩球条件不足，安全回退';
-            recordRingEvaluation('cancel',{skill:'sling',reason:ringCombo.reason});
-          }
-        }
+        beginRingSlingOnCapture(o,isMain);
       }
       recordRingEvaluation('inner',{skill:'capture',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});
       if(isMain&&ringCombo.name==='unload')advanceRingCombo('capture','内环软壁完成捕捉与耗能');
@@ -2908,8 +2916,9 @@
       const ringFocus=autoPilot?selectAutoFocusBall():ball;
       const sensed=updateRingSensor(dt,ringFocus);
       updateRingState(sensed,dt,ringFocus);
-      updateRingSling(dt,ringFocus);
+      // 先更新本帧安全仲裁，再推进甩球状态，避免执行器读取上一帧的过期优先级。
       updateRingPlanner(dt,ringFocus);
+      updateRingSling(dt,ringFocus);
     }else{
       updateRingSensor(0,null);
       ringState.valid=false;ringState.hold=0;

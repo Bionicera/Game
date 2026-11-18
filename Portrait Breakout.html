@@ -271,8 +271,13 @@
   let ringSling = {
     phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
     cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,
-    dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:0,lastAngle:0
+    dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''
   };
+  // RingPlanner：技能仲裁与短期组合上下文；只输出挡板目标，不直接写球体物理。
+  let ringPlanner = {skill:'recover',targetX:null,reason:'等待感知',confidence:0,focus:null,phase:'idle',updatedAt:0};
+  // RingEvaluator：有界的本地动作结果统计，不联网、不持久化、不参与物理决策。
+  let ringEvaluator = {requested:0,accepted:0,completed:0,cancelled:0,innerContacts:0,outerContacts:0,
+    slows:0,boosts:0,guides:0,slingReleases:0,lastSpeed:0,lastSkill:'recover',events:[]};
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -587,7 +592,8 @@
   }
   function ringAimReflect(vx,vy,rel,Ux,r){
     const mode=ringAimMode(rel,r),n=ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
-    const gain=mode==='capture'?.90:1.045;
+    const raw=Math.hypot(out.vx,out.vy),cap=baseSpeed()*1.72;
+    const gain=mode==='capture'?.90:(raw>0?Math.min(1.045,cap/raw):1);
     return {vx:out.vx*gain,vy:out.vy*gain,mode};
   }
 
@@ -601,13 +607,20 @@
     const ratio=Math.max(0,Math.hypot(o.vx,o.vy)/Math.max(1,baseSpeed()));
     // 低速球多震荡蓄能，高速球少震荡，避免无谓堆速。
     const cyclesTarget=clamp(Math.round(4-ratio*1.5),1,4);
-    const amplitude=clamp(paddle.w*.17,16,44);
-    const firstTarget=clamp(paddle.x+dashDir*amplitude,2,W-paddle.w-2);
+    const minX=2,maxX=W-paddle.w-2,anchorX=clamp(paddle.x,minX,maxX);
+    let amplitude=Math.min(clamp(paddle.w*.17,16,44),Math.max(0,anchorX-minX),Math.max(0,maxX-anchorX));
+    if(amplitude<9){
+      dashDir=-dashDir;exitSide=-exitSide;
+      amplitude=Math.min(clamp(paddle.w*.17,16,44),Math.max(0,anchorX-minX),Math.max(0,maxX-anchorX));
+    }
+    if(amplitude<9)return false;
+    const firstTarget=clamp(anchorX+dashDir*amplitude,minX,maxX);
     ringSling={
-      phase:'oscillate',focus:o,anchorX:paddle.x,targetX:firstTarget,dashDir,exitSide,
-      cyclesTarget,halfSwings:0,amplitude,dashStartX:paddle.x,dashDistance:0,
-      dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:ringSling.lastCycles||0,lastAngle:0
+      phase:'oscillate',focus:o,anchorX,targetX:firstTarget,dashDir,exitSide,
+      cyclesTarget,halfSwings:0,amplitude,dashStartX:anchorX,dashDistance:0,
+      dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:ringSling.lastCycles||0,lastAngle:0,abortReason:''
     };
+    recordRingEvaluation('accept',{skill:'sling'});
     return true;
   }
 
@@ -626,6 +639,13 @@
       ringSling.phase='idle';ringSling.focus=null;
     }
     const d=Math.max(0,dt||0);
+    if(ringSling.phase!=='idle')ringSling.phaseTime=(ringSling.phaseTime||0)+d;
+    const phaseLimit=ringSling.phase==='oscillate'?3.2:ringSling.phase==='dash'?1.05:ringSling.phase==='release'?.48:1.0;
+    if(ringSling.phase!=='idle'&&ringSling.phase!=='cooldown'&&ringSling.phaseTime>phaseLimit){
+      ringSling.abortReason='阶段超时';
+      recordRingEvaluation('cancel',{skill:'sling',reason:ringSling.abortReason});
+      ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.focus=null;
+    }
     if(ringSling.phase==='cooldown'){
       ringSling.cooldown=Math.max(0,ringSling.cooldown-d);
       if(ringSling.cooldown===0)ringSling.phase='idle';
@@ -633,13 +653,19 @@
       if(Math.abs(paddle.x-ringSling.targetX)<=5){
         ringSling.halfSwings++;
         if(ringSling.halfSwings>=ringSling.cyclesTarget*2){
-          ringSling.phase='dash';
+          ringSling.phase='dash';ringSling.phaseTime=0;
           ringSling.dashStartX=paddle.x;
           const aimX=aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:paddle.x+paddle.w/2;
           const targetOffset=clamp(Math.abs(aimX-(paddle.x+paddle.w/2))/Math.max(1,W*.5),0,1);
           // 短冲距离只由目标方向/偏移决定；震荡次数只决定甩出速度，两者不互相串扰。
-          ringSling.dashDistance=clamp(RING_R()*(.12+.22*targetOffset),18,RING_R()*.34);
-          ringSling.targetX=clamp(paddle.x+ringSling.dashDir*ringSling.dashDistance,2,W-paddle.w-2);
+          const requestedDistance=clamp(RING_R()*(.12+.22*targetOffset),18,RING_R()*.34);
+          ringSling.targetX=clamp(paddle.x+ringSling.dashDir*requestedDistance,2,W-paddle.w-2);
+          ringSling.dashDistance=Math.abs(ringSling.targetX-paddle.x);
+          if(ringSling.dashDistance<10){
+            ringSling.abortReason='边界行程不足';
+            recordRingEvaluation('cancel',{skill:'sling',reason:ringSling.abortReason});
+            ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.focus=null;
+          }
         }else{
           const sign=ringSling.halfSwings%2===0?ringSling.dashDir:-ringSling.dashDir;
           ringSling.targetX=clamp(ringSling.anchorX+sign*ringSling.amplitude,2,W-paddle.w-2);
@@ -648,7 +674,7 @@
     }else if(ringSling.phase==='dash'){
       ringSling.dashProgress=clamp(Math.abs(paddle.x-ringSling.dashStartX)/Math.max(1,ringSling.dashDistance),0,1);
       if(ringSling.dashProgress>=.9||Math.abs(paddle.x-ringSling.targetX)<=5){
-        ringSling.phase='release';ringSling.releaseTimer=0;
+        ringSling.phase='release';ringSling.releaseTimer=0;ringSling.phaseTime=0;
       }
     }else if(ringSling.phase==='release'){
       ringSling.releaseTimer+=d;
@@ -678,7 +704,9 @@
     o.vx=Math.sin(launchAngle)*launchSpeed;
     o.vy=-Math.cos(launchAngle)*launchSpeed;
     ringSling.lastCycles=cycles;ringSling.lastAngle=launchAngle;
-    ringSling.phase='cooldown';ringSling.cooldown=.72;ringSling.focus=null;
+    ringSling.phase='cooldown';ringSling.cooldown=.72;ringSling.phaseTime=0;ringSling.focus=null;
+    recordRingEvaluation('sling',{skill:'sling',before:current,after:launchSpeed});
+    recordRingEvaluation('complete',{skill:'sling'});
     ringMoodEvent('🤩',.95);
     beep(680+cycles*55,.07,'triangle',.045);
     return true;
@@ -804,6 +832,88 @@
       nextWall:sensor.nextWall
     };
     return ringState;
+  }
+
+  function recordRingEvaluation(type,detail){
+    if(shape!=='ring')return;
+    const d=detail||{},e=ringEvaluator;
+    if(type==='request')e.requested++;
+    else if(type==='accept')e.accepted++;
+    else if(type==='complete')e.completed++;
+    else if(type==='cancel')e.cancelled++;
+    else if(type==='inner'){
+      e.innerContacts++;
+      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after<d.before*.985)e.slows++;
+    }else if(type==='outer'){
+      e.outerContacts++;
+      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after>d.before*1.005)e.boosts++;
+    }else if(type==='guide')e.guides++;
+    else if(type==='sling')e.slingReleases++;
+    e.lastSkill=d.skill||e.lastSkill;
+    if(Number.isFinite(d.after))e.lastSpeed=d.after;
+    e.events.push({type,skill:d.skill||null,before:Number.isFinite(d.before)?d.before:null,
+      after:Number.isFinite(d.after)?d.after:null,at:time||0});
+    if(e.events.length>48)e.events.splice(0,e.events.length-48);
+  }
+
+  // RingPlanner 把感知与状态映射为可执行的技能请求；安全接球优先于进攻。
+  function planRingSkill(sensor,decision,focus){
+    const minX=2,maxX=W-paddle.w-2,center=paddle.x+paddle.w/2;
+    const safeTarget=x=>clamp((Number.isFinite(x)?x:center)-paddle.w/2,minX,maxX);
+    if(shape!=='ring'||!sensor||!sensor.valid||!focus)
+      return {skill:'recover',targetX:safeTarget(center),reason:'感知无效，回到安全中心',confidence:.2};
+    if(ringSling.phase!=='idle'&&ringSling.focus===focus)
+      return {skill:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
+    // 预计球将在 0.42 秒内到达底部危险区时，直接放弃攻击/技能，优先接球。
+    const floorY=H-focus.r-3;
+    const floorEta=focus.vy>1?(floorY-focus.y)/focus.vy:Infinity;
+    if(floorEta>0&&floorEta<.42){
+      const landing=reflectScreenX(focus.x+focus.vx*floorEta,focus.r);
+      return {skill:'safe-catch',targetX:safeTarget(landing),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
+    }
+    if(sensor.gapEta!==null&&sensor.gapEta<.28&&sensor.gapPassable){
+      return {skill:'gap-guide',targetX:safeTarget(sensor.gapPredictedX),
+        reason:'缺口通行条件成立，移动圆环对准通道',confidence:.93,eta:sensor.gapEta};
+    }
+    if(sensor.speedRatio>=1.18||sensor.speedTrend==='accelerating'&&sensor.speedRatio>=.92){
+      let predicted=focus.x;
+      if(sensor.etaInner!==null&&sensor.etaInner<.6)
+        predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);
+      return {skill:'capture',targetX:safeTarget(predicted),reason:'高速或持续加速，优先内壁卸力',confidence:.88};
+    }
+    if(sensor.speedRatio<.82||sensor.speedTrend==='decelerating'){
+      return {skill:'boost',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
+        reason:'能量不足或速度下降，准备外壁硬壁增能',confidence:.82};
+    }
+    if(sensor.radialZone==='inside'||sensor.radialZone==='wall-band'){
+      const steer=sensor.gapPassable&&sensor.gapPredictedX!==null?sensor.gapPredictedX:focus.x;
+      return {skill:'guide',targetX:safeTarget(steer),reason:'球处于环内，微调圆环中心控制球路',confidence:.76};
+    }
+    return {skill:decision&&decision.intent==='aim'?'attack':'guide',
+      targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
+      reason:'保持目标攻击轨迹',confidence:.7};
+  }
+
+  function updateRingPlanner(dt,focus){
+    if(shape!=='ring'||state!=='playing'||!autoPilot||!focus){
+      if(ringPlanner.skill!=='recover'&&ringPlanner.skill!=='idle')
+        recordRingEvaluation('cancel',{skill:ringPlanner.skill,reason:'驾驶条件失效'});
+      ringPlanner={skill:'recover',targetX:null,reason:'等待圆环 Auto',confidence:0,focus:null,phase:'idle',updatedAt:ringPlanner.updatedAt||0};
+      return ringPlanner;
+    }
+    const plan=planRingSkill(ringSensor,ringState,focus);
+    if(ringPlanner.focus!==focus||ringPlanner.skill!==plan.skill){
+      if(ringPlanner.skill!=='recover'&&ringPlanner.skill!=='idle')
+        recordRingEvaluation('cancel',{skill:ringPlanner.skill,reason:'技能仲裁切换'});
+      if(plan.skill!=='recover'&&plan.skill!=='attack')
+        recordRingEvaluation('request',{skill:plan.skill});
+      if(plan.skill!=='recover'&&plan.skill!=='attack')
+        recordRingEvaluation('accept',{skill:plan.skill});
+    }
+    ringPlanner={...plan,focus,phase:plan.skill==='sling'?ringSling.phase:'planned',
+      updatedAt:ringPlanner.updatedAt+Math.max(0,dt||0)};
+    if(plan.skill==='guide'||plan.skill==='gap-guide')recordRingEvaluation('guide',{skill:plan.skill});
+    return ringPlanner;
   }
 
   function reflectScreenX(x,r){
@@ -1052,6 +1162,7 @@
     o.y=contact.q.y+contact.n.y*(o.r+.6);
     if(contact.kind==='inner'){
       if(tryReleaseRingSling(o,contact,isMain))return true;
+      const speedBeforeContact=Math.hypot(o.vx,o.vy);
       // 内壁是软捕捉/导向面：压低法向反弹，保留大部分切向运动，让球沿不规则内壁滑行并逐步减速。
       const nx=contact.n.x,ny=contact.n.y,tx=-ny,ty=nx;
       const rvx=o.vx-paddle.vx,rvy=o.vy;
@@ -1065,10 +1176,15 @@
         beep(390,.045,'sine',.025);
         if(isMain)beginRingSling(o);
       }
+      recordRingEvaluation('inner',{skill:'capture',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});
     }else{
-      // 外环壁是硬攻击面：使用完整挡板反射，再给予轻微加速。
+      // 外环壁是硬攻击面：使用完整挡板反射，再给予有界增益，避免连续加速失控。
+      const speedBeforeContact=Math.hypot(o.vx,o.vy);
       bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/R,-.92,.92));
-      o.vx*=1.045;o.vy*=1.045;
+      const afterReflect=Math.hypot(o.vx,o.vy),speedCap=baseSpeed()*1.72;
+      const gain=afterReflect>0?Math.min(1.045,speedCap/afterReflect):1;
+      o.vx*=gain;o.vy*=gain;
+      recordRingEvaluation('outer',{skill:'boost',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});
       if(isMain) ringMoodEvent('🤩',1.2);
     }
     return true;
@@ -1633,6 +1749,8 @@
     const r = focus.r;
     if(shape==='ring'&&ringSling.phase!=='idle'&&ringSling.focus===focus)
       return clamp(ringSling.targetX,2,W-paddle.w-2);
+    if(shape==='ring'&&ringPlanner.focus===focus&&['safe-catch','gap-guide','capture','guide'].includes(ringPlanner.skill)&&Number.isFinite(ringPlanner.targetX))
+      return clamp(ringPlanner.targetX,2,W-paddle.w-2);
     // 弹珠台有弹力柱与扣命球袋，使用关卡专用前向模拟；不启用未经机关验证的攻击反推。
     if(isCurseLevel()){
       const predicted = focus.vy > 0 ? predictPlinkoLanding(focus) : null;
@@ -2600,10 +2718,12 @@
       const sensed=updateRingSensor(dt,ball);
       updateRingState(sensed,dt,ball);
       updateRingSling(dt,ball);
+      updateRingPlanner(dt,ball);
     }else{
       updateRingSensor(0,null);
       ringState.valid=false;ringState.hold=0;
       updateRingSling(0,null);
+      updateRingPlanner(0,null);
     }
     if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣' && ringMood.t>0))){
       ringMood.t=Math.max(0,ringMood.t-dt);

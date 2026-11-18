@@ -645,6 +645,7 @@
       ringSling.abortReason='阶段超时';
       recordRingEvaluation('cancel',{skill:'sling',reason:ringSling.abortReason});
       ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.phaseTime=0;ringSling.focus=null;
+      if(ringCombo.name==='sling')ringCombo.index=Math.max(0,ringCombo.steps.length-1);
       return ringSling; // 超时帧不同时扣除冷却，避免大 dt 直接跳过保护状态。
     }
     if(ringSling.phase==='cooldown'){
@@ -927,6 +928,7 @@
       if(ringPlanner.skill!=='recover'&&ringPlanner.skill!=='idle')
         recordRingEvaluation('cancel',{skill:ringPlanner.skill,reason:'驾驶条件失效'});
       ringPlanner={skill:'recover',targetX:null,reason:'等待圆环 Auto',confidence:0,focus:null,phase:'idle',updatedAt:ringPlanner.updatedAt||0};
+      ringCombo={name:'recovery',steps:['recover'],index:0,focus:null,startedAt:time||0,reason:'驾驶中断，清理组合状态'};
       return ringPlanner;
     }
     const plan=planRingSkill(ringSensor,ringState,focus);
@@ -944,6 +946,8 @@
       advanceRingCombo('slow','内环耗能后速度回落，开始导流');
     if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='guide'&&plan.skill==='gap-guide')
       advanceRingCombo('guide','缺口进入可通行窗口');
+    if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
+      advanceRingCombo('guide','球已离开环内区域，结束导流');
     if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='gap-guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
       advanceRingCombo('gap-guide','球已通过逻辑缺口，转入攻击');
     if(ringCombo.name==='control'&&plan.skill==='gap-guide'&&ringCombo.steps[ringCombo.index]==='guide')
@@ -952,6 +956,8 @@
       if(ringCombo.steps[ringCombo.index]==='guide')advanceRingCombo('guide','导流结束，切入攻击');
       if(ringCombo.steps[ringCombo.index]==='gap-guide')advanceRingCombo('gap-guide','通道阶段结束，切入攻击');
     }
+    if(ringCombo.name==='control'&&ringCombo.steps[ringCombo.index]==='guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
+      advanceRingCombo('guide','球已离开环内区域，结束导流');
     if(ringCombo.name==='control'&&ringCombo.steps[ringCombo.index]==='gap-guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
       advanceRingCombo('gap-guide','球已通过逻辑缺口，转入攻击');
     if(ringCombo.name==='charge'&&ringCombo.steps[ringCombo.index]==='attack'&&ringSensor.speedRatio<.82)

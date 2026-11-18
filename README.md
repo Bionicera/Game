@@ -1,14 +1,16 @@
 # 彩虹星河 · Rainbow Galaxy
 
-## 📱 手机浏览器试玩
+## 📱 手机浏览器开发测试
 
-<a href="https://raw.githack.com/Bionicera/Game/main/Portrait%20Breakout.html">
-  <img src="https://img.shields.io/badge/%E6%89%8B%E6%9C%BA%E6%B5%8F%E8%A7%88%E5%99%A8-%E7%AB%8B%E5%8D%B3%E8%AF%95%E7%8E%A9-16a34a?style=for-the-badge" alt="手机浏览器打开游戏：立即试玩">
+<a href="https://cdn.jsdelivr.net/gh/Bionicera/Game@main/Portrait%20Breakout.html">
+  <img src="https://img.shields.io/badge/%E6%89%8B%E6%9C%BA%E6%B5%8F%E8%A7%88%E5%99%A8-%E7%AB%8B%E5%8D%B3%E8%BF%90%E8%A1%8C-16a34a?style=for-the-badge" alt="手机浏览器打开游戏：立即运行">
 </a>
 
-也可以直接打开：[彩虹星河 · Rainbow Galaxy](https://raw.githack.com/Bionicera/Game/main/Portrait%20Breakout.html)
+直接打开：[彩虹星河 · Rainbow Galaxy](https://cdn.jsdelivr.net/gh/Bionicera/Game@main/Portrait%20Breakout.html)
 
-> 首次打开时，托管服务可能会显示一次 HTML 安全确认页，确认后即可进入游戏。此试玩链接用于开发测试；仓库更新后，页面缓存可能需要几分钟刷新。
+如果刚提交了代码但手机仍显示旧版本，点击这里刷新试玩文件的 CDN 缓存：[刷新测试页面缓存](https://purge.jsdelivr.net/gh/Bionicera/Game@main/Portrait%20Breakout.html)，然后重新打开上面的游戏链接。
+
+> 这是跟随 `main` 分支的开发测试入口，不是正式发布版本，也没有配置 GitHub Pages。为了让频繁调试更方便，更新代码后可先刷新 CDN 缓存再在手机上重载页面。
 
 ## 游戏说明
 

@@ -406,3 +406,10 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 新 CI run：`44258310323`（提交 `2f0f701f`），状态 queued，等待 Node 与 Chromium Job 实际结果。
 - 相关运行：[run 44258115350](https://github.com/Bionicera/Game/actions/runs/44258115350)、[run 44258167304](https://github.com/Bionicera/Game/actions/runs/44258167304)、[run 44258310323](https://github.com/Bionicera/Game/actions/runs/44258310323)。
 - 测试修复 Commit：`2f0f701fcfeb0db1e4b91237118d29b2988fa575`。
+
+
+### 2026-11-18 · CI 第二轮诊断 · 补齐第三处跨 VM 数组断言
+- 新一轮 Node Job 已确认前两处空数组断言修正生效；69 项中 66 项通过，剩余 1 项仍因同类跨 VM 数组原型差异失败，位置为传感器非法输入分支的 `invalid.trajectoryEvents` 空数组断言。
+- 修复：将第三处断言也改为检查数组长度为 0，不改变生产代码。
+- 最新提交：`a6fe4eeb1f9656ad297e7334b4e57157b939132e`；对应 Actions run `44258425078` 已排队，等待复验。
+- 当前不能宣称 Node 全绿；前一轮 Chromium smoke 已成功，最新一轮 Browser Job 结果仍待确认。

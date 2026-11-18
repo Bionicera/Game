@@ -532,6 +532,39 @@
   const RING_R = () => paddle.w * .47;
   const RING_GAP_HALF = () => Math.asin(clamp((Math.max(1, ball.r * 3)) / RING_R(), 0, .92));
   const RING_WALL = () => Math.max(5, Math.min(paddle.h * .72, RING_R() * .22));
+  // 一个瞄准坐标，两种决策模型：球体能通过有效缺口时捕捉，否则由外环攻击壁接球。
+  const ringAimOffset = rel => clamp(rel, -.92, .92) * RING_R();
+  function ringAimMode(rel,r){
+    const clearHalf=Math.max(0,RING_R()*Math.sin(RING_GAP_HALF())-(r||ball.r));
+    return Math.abs(ringAimOffset(rel))<=clearHalf?'capture':'attack';
+  }
+  function ringAimContactY(rel,r){
+    const R=RING_R(),cy=paddle.y+paddle.h-R,off=ringAimOffset(rel);
+    if(ringAimMode(rel,r)==='capture'){
+      const ri=R-RING_WALL(),a=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
+      return cy+ringInnerRadius(a)*Math.sin(a)-r;
+    }
+    return cy-Math.sqrt(Math.max(0,(R+r)*(R+r)-off*off));
+  }
+  function ringAimNormal(rel,r){
+    const R=RING_R(),off=ringAimOffset(rel);
+    if(ringAimMode(rel,r)==='capture'){
+      const ri=R-RING_WALL(),a=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
+      return {x:-Math.cos(a),y:-Math.sin(a)};
+    }
+    const a=-Math.PI/2+Math.asin(clamp(off/(R+r),-.92,.92));
+    return {x:Math.cos(a),y:Math.sin(a)};
+  }
+  function ringAimReflect(vx,vy,rel,Ux,r){
+    const mode=ringAimMode(rel,r),n=ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
+    const gain=mode==='capture'?.90:1.045;
+    return {vx:out.vx*gain,vy:out.vy*gain,mode};
+  }
+  function reflectScreenX(x,r){
+    const lo=2+r,span=Math.max(1,(W-2-r)-lo);
+    let m=(x-lo)%(2*span);if(m<0)m+=2*span;
+    return lo+(m<=span?m:2*span-m);
+  }
   // 内环不是完美圆：三组不同频率、不同相位的浅起伏，避免左右镜像与周期性共振。
   // 起伏幅度保持克制，先从约 4% 半径以内开始，后续根据实测手感迭代。
   function ringInnerRadius(a){
@@ -559,7 +592,7 @@
       const h = MOON_H();
       return bottom - h + 2.88 * h * t * (1 - t);
     }
-    if(shape === 'ring') return bottom - RING_R() * (1 - Math.cos(RING_GAP_HALF()));
+    if(shape === 'ring') return bottom - RING_R() * (1 + Math.cos(RING_GAP_HALF()));
     const u = clamp(2 * t - 1, -1, 1);
     return bottom - SEMI_R() * Math.sqrt(Math.max(0, 1 - u * u));
   }
@@ -753,9 +786,9 @@
     const px=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
     o.x=px+contact.q.x+contact.n.x*(o.r+.6);
     o.y=contact.q.y+contact.n.y*(o.r+.6);
-    bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/(pw/2),-1,1));
-    // 内壁柔化耗散，外壁给予轻微增速；幅度先保守设置，避免球速突变。
-    const wallGain=contact.kind==='inner'?.975:1.025;
+    bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/R,-.92,.92));
+    // 内壁软捕捉，明显耗散动能；外壁硬攻击，轻微做功加速。
+    const wallGain=contact.kind==='inner'?.90:1.045;
     o.vx*=wallGain;o.vy*=wallGain;
     return true;
   }
@@ -898,12 +931,22 @@
       if(y>paddle.y+Math.max(120,H*.22)) break;
       // 命中砖块后球会向下返回；继续模拟一次真实挡板反射，才能评估下一轮攻击。
       if(vy>0){
-        const rel=clamp((x-(paddleX+paddle.w/2))/(paddle.w/2),-.9,.9);
-        const paddleSurface=surfaceY((rel+1)/2);
-        if(y+r>=paddleSurface && y<paddle.y+paddle.h+12){
-          const bounced=paddleReflect(vx,vy,rel,paddleVx);
-          vx=bounced.vx;vy=bounced.vy;y=paddleSurface-r-.6;
-          continue;
+        if(shape==='ring'){
+          const offset=x-(paddleX+paddle.w/2),rel=clamp(offset/RING_R(),-.92,.92);
+          const contactY=ringAimContactY(rel,r);
+          if(Math.abs(offset)<=RING_R()+r&&y>=contactY&&y<paddle.y+paddle.h+RING_R()+12){
+            const n=ringAimNormal(rel,r),bounced=ringAimReflect(vx,vy,rel,paddleVx,r);
+            vx=bounced.vx;vy=bounced.vy;
+            x=paddleX+paddle.w/2+ringAimOffset(rel)+n.x*(r+.6);
+            y=contactY+n.y*(r+.6);continue;
+          }
+        }else{
+          const rel=clamp((x-(paddleX+paddle.w/2))/(paddle.w/2),-.9,.9);
+          const paddleSurface=surfaceY((rel+1)/2);
+          if(y+r>=paddleSurface&&y<paddle.y+paddle.h+12){
+            const bounced=paddleReflect(vx,vy,rel,paddleVx);
+            vx=bounced.vx;vy=bounced.vy;y=paddleSurface-r-.6;continue;
+          }
         }
       }
       let contact=null, bestT=Infinity;
@@ -996,66 +1039,61 @@
   }
 
   function planAim(landX, focus){
-    const r = focus.r;
-    const value = b => brickStrategicValue(
-      b, levelType(), snake ? snake.cells.length : 0
-    );
-    // 目标锁定滞回：当前目标仍有效时，除非新目标明显更优，否则不切换。
-    // 同一目标也惩罚接球点的大幅漂移，避免多个近似候选让挡板左右摇摆。
-    const previous = aimPlan;
-    let best = null;
-    for(let rel = -.78; rel <= .781; rel += .09){
-      if(Math.abs(rel) < .18) continue;   // 不用挡板中心接球
-      const t = (rel + 1) / 2;
-      const want = landX - t * paddle.w;
-      if(Math.abs(clamp(want, 2, W - paddle.w - 2) - want) > 1) continue; // 边缘够不到
-      // 挡板由一阶响应 x += (target-x)·dt·26 驱动，接触瞬间速度 ≈ 26·(目标 − 当前)
-      const Ux = paddleCommandVelocity(want, paddle.x);
-      const out = paddleReflect(focus.vx, focus.vy, rel, Ux);
-      const ang = Math.atan2(out.vx, -out.vy);
-      if(Math.abs(ang) > 1.25) continue;
-      const path = predictAttackPath(landX, surfaceY(t), out.vx, out.vy, r, want, Ux, 4);
-      const first = path.hits.length ? path.hits[0] : null;
-      if(!first) continue;
-      // 规则效用独立评估候选；真实物理保持权威。
-      const switchPenalty = previous && previous.brick && previous.brick.alive &&
-        previous.brick !== first.b ? .34 : 0;
-      const relPenalty = previous && previous.brick === first.b
-        ? Math.abs(rel - previous.rel) * .24 : 0;
-      const chainUtility=attackPathUtility(path.hits,levelType(),snake ? snake.cells.length : 0);
-      const vNorm=clamp(chainUtility/6,-1,1);
-      const aNorm=clamp(ang/1.25,-1,1);
+    const r=focus.r,isRing=shape==='ring';
+    const value=b=>brickStrategicValue(b,levelType(),snake?snake.cells.length:0);
+    const previous=aimPlan;
+    let best=null;
+    const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
+    for(let rel=firstRel;rel<=lastRel;rel+=relStep){
+      if(!isRing&&Math.abs(rel)<.18)continue;
+      const offset=isRing?ringAimOffset(rel):rel*paddle.w/2;
+      let candidateX=landX,contactY=surfaceY((rel+1)/2)-r;
+      if(isRing){
+        contactY=ringAimContactY(rel,r);
+        if(focus.vy>.01){
+          const tt=Math.max(0,(contactY-focus.y)/focus.vy);
+          candidateX=reflectScreenX(focus.x+focus.vx*tt,r);
+        }
+      }
+      const want=candidateX-paddle.w/2-offset;
+      if(Math.abs(clamp(want,2,W-paddle.w-2)-want)>1)continue;
+      const Ux=paddleCommandVelocity(want,paddle.x);
+      const out=isRing?ringAimReflect(focus.vx,focus.vy,rel,Ux,r):paddleReflect(focus.vx,focus.vy,rel,Ux);
+      const ang=Math.atan2(out.vx,-out.vy);
+      if(Math.abs(ang)>1.25)continue;
+      const path=predictAttackPath(candidateX,contactY,out.vx,out.vy,r,want,Ux,4);
+      const first=path.hits.length?path.hits[0]:null;
+      if(!first)continue;
+      const switchPenalty=previous&&previous.brick&&previous.brick.alive&&previous.brick!==first.b ? .34:0;
+      const relPenalty=previous&&previous.brick===first.b?Math.abs(rel-previous.rel)*.24:0;
+      const chainUtility=attackPathUtility(path.hits,levelType(),snake?snake.cells.length:0);
+      const vNorm=clamp(chainUtility/6,-1,1),aNorm=clamp(ang/1.25,-1,1);
       const travel=clamp(Math.abs(want-paddle.x)/W,0,1);
-      const vxNorm=clamp(focus.vx/1200,-1,1);
-      const vyNorm=clamp(Math.abs(focus.vy)/1200,0,1);
+      const vxNorm=clamp(focus.vx/1200,-1,1),vyNorm=clamp(Math.abs(focus.vy)/1200,0,1);
       const speedNorm=Math.hypot(vxNorm,vyNorm)/Math.SQRT2;
-      const shapeIndex=Math.max(0,SHAPES.indexOf(shape));
-      const levelIndex=levelType();
+      const shapeIndex=Math.max(0,SHAPES.indexOf(shape)),levelIndex=levelType();
       let ruleUtility=1.10*vNorm-.18*Math.abs(rel)-.12*Math.abs(aNorm)
         -.10*travel-.07*travel*(.35+.65*speedNorm)
-        -.08*Math.abs(clamp(first.x/W*2-1,-1,1)-clamp(landX/W*2-1,-1,1));
-      if(shapeIndex===1) ruleUtility-=.12*Math.max(0,Math.abs(rel)-.52);
-      if(shapeIndex===2) ruleUtility-=.18*Math.max(0,Math.abs(rel)-.66);
-      if(shapeIndex===3) ruleUtility-=.10*Math.max(0,Math.abs(aNorm)-.72);
-      if(levelIndex===7) ruleUtility-=.48*Math.max(0,-vNorm);
-      if(levelIndex===4) ruleUtility+=.08*Math.max(0,vNorm);
-      if(levelIndex===6) ruleUtility+=.06*Math.max(0,vNorm);
-      if(levelIndex===9) ruleUtility+=.04*Math.max(0,vNorm);
-      if(levelIndex===10) ruleUtility+=.05*Math.max(0,vNorm);
-      // 连击潜力进入规则效用；首个真实预测目标与整条路径共同参与评分。
-      ruleUtility += .22 * clamp((chainUtility-value(first.b))/4,-.5,1);
-      const learned=paddleBrainEvaluate(
-        paddleBrainFeatures(rel,ang,value(first.b),first.x,landX,want,focus));
-      const utility=Number.isFinite(learned)
-        ? ruleUtility*.65+learned*.35 : ruleUtility;
-      const cost=-utility+switchPenalty+relPenalty
-        +(first.x<0||first.x>W?.08:0);
+        -.08*Math.abs(clamp(first.x/W*2-1,-1,1)-clamp(candidateX/W*2-1,-1,1));
+      if(shapeIndex===1)ruleUtility-=.12*Math.max(0,Math.abs(rel)-.52);
+      if(shapeIndex===2)ruleUtility-=.18*Math.max(0,Math.abs(rel)-.66);
+      if(shapeIndex===3)ruleUtility-=.10*Math.max(0,Math.abs(aNorm)-.72);
+      if(levelIndex===7)ruleUtility-=.48*Math.max(0,-vNorm);
+      if(levelIndex===4)ruleUtility+=.08*Math.max(0,vNorm);
+      if(levelIndex===6)ruleUtility+=.06*Math.max(0,vNorm);
+      if(levelIndex===9)ruleUtility+=.04*Math.max(0,vNorm);
+      if(levelIndex===10)ruleUtility+=.05*Math.max(0,vNorm);
+      ruleUtility+=.22*clamp((chainUtility-value(first.b))/4,-.5,1);
+      const learned=paddleBrainEvaluate(paddleBrainFeatures(rel,ang,value(first.b),first.x,candidateX,want,focus));
+      const utility=Number.isFinite(learned)?ruleUtility*.65+learned*.35:ruleUtility;
+      const modePenalty=isRing&&ringAimMode(rel,r)==='capture' ? .025:0;
+      const cost=-utility+switchPenalty+relPenalty+modePenalty+(first.x<0||first.x>W?.08:0);
       if(!best||cost<best.cost)
-        best={cost,rel,Ux,brick:first.b,err:0,need:ang,tx:first.x,chainCount:path.hits.length,brain:learned};
+        best={cost,rel,Ux,brick:first.b,err:0,need:ang,tx:first.x,landX:candidateX,
+          mode:isRing?ringAimMode(rel,r):'standard',chainCount:path.hits.length,brain:learned};
     }
-    aimPlan = best || {rel:0, Ux:0, brick:null, err:0};
+    aimPlan=best||{rel:0,Ux:0,brick:null,err:0,mode:isRing?'capture':'standard'};
   }
-
   // Swept circle contact shared by Plinko's live physics and Auto prediction.
   function plinkoSweepCircleContact(x0,y0,x1,y1,ballR,p){
     const sx=x1-x0,sy=y1-y0,mx=x0-p.x,my=y0-p.y;
@@ -1319,32 +1357,29 @@
     if(state === 'playing' && focus.vy > 0){
       // 曲面挡板各处高度差很大（三角形达 82px），要用「打算接球的那个部位」
       // 的高度算落地时间，否则挡板一移动落点就预测偏了
-      const aimRel = aimPlan ? aimPlan.rel : 0;
-      const dy = surfaceY(clamp((aimRel + 1) / 2, 0, 1)) - focus.y - r;
-      const tt = dy > 0 ? dy / focus.vy : 0;
-      let x = focus.x + focus.vx * tt;
-      const lo = 2 + r, span = Math.max(1, (W - 2 - r) - lo);
-      let m = (x - lo) % (2 * span);
-      if(m < 0) m += 2 * span;
-      landX = lo + (m <= span ? m : 2 * span - m);
-      lastLandX = landX;
-      // 球下落时重新反推瞄准目标；球上升时沿用，挡板提前就位
-      if((aimTick++ % 3 === 0) || !aimPlan || (aimPlan.brick && !aimPlan.brick.alive))
-        planAim(landX, focus);
+      const aimRel=aimPlan?aimPlan.rel:0;
+      const contactY=shape==='ring'?ringAimContactY(aimRel,r):surfaceY(clamp((aimRel+1)/2,0,1))-r;
+      const tt=Math.max(0,(contactY-focus.y)/focus.vy);
+      landX=reflectScreenX(focus.x+focus.vx*tt,r);
+      lastLandX=landX;
+      if((aimTick++%3===0)||!aimPlan||(aimPlan.brick&&!aimPlan.brick.alive)){
+        planAim(landX,focus);
+        if(shape==='ring'&&aimPlan&&Number.isFinite(aimPlan.landX))landX=aimPlan.landX;
+      }
     } else if(state === 'playing' && aimPlan && aimPlan.brick && !aimPlan.brick.alive){
       // 多球时目标砖常被辅球先打掉：只换目标、不改接球点，挡板不会突然横跳
-      const keepRel = aimPlan.rel;
-      const want = (lastLandX || focus.x) - (keepRel + 1) / 2 * paddle.w;
-      const Ux = paddleCommandVelocity(want, paddle.x);
-      const out = paddleReflect(focus.vx, focus.vy, keepRel, Ux);
-      const ang = Math.atan2(out.vx, -out.vy);
-      const hit = predictFirstBrick(lastLandX || focus.x,
-        surfaceY(clamp((keepRel + 1) / 2, 0, 1)), ang, r);
+      const keepRel=aimPlan.rel,offset=shape==='ring'?ringAimOffset(keepRel):keepRel*paddle.w/2;
+      const want=(lastLandX||focus.x)-paddle.w/2-offset,Ux=paddleCommandVelocity(want,paddle.x);
+      const out=shape==='ring'?ringAimReflect(focus.vx,focus.vy,keepRel,Ux,r):paddleReflect(focus.vx,focus.vy,keepRel,Ux);
+      const ang=Math.atan2(out.vx,-out.vy);
+      const aimY=shape==='ring'?ringAimContactY(keepRel,r):surfaceY(clamp((keepRel+1)/2,0,1));
+      const hit=predictFirstBrick(lastLandX||focus.x,aimY,ang,r);
       if(hit) aimPlan = {cost:0, rel:keepRel, Ux, brick:hit.b, err:0, need:ang, tx:hit.x};
     }
-    const rel = aimPlan ? aimPlan.rel : 0;
-    // 关键：让球落在挡板的 rel 位置，而不是永远落在中心
-    let target = clamp(landX - (rel + 1) / 2 * paddle.w, 2, W - paddle.w - 2);
+    const rel=aimPlan?aimPlan.rel:0;
+    // 一个瞄准坐标：普通挡板按有效宽度映射，圆环按半径映射到捕捉/攻击决策区。
+    const aimOffset=shape==='ring'?ringAimOffset(rel):rel*paddle.w/2;
+    let target=clamp(landX-paddle.w/2-aimOffset,2,W-paddle.w-2);
     // 保命优先：真要漏接了就放弃瞄准，用中心把球接住再说
     if(state === 'playing' && focus.vy > 0 &&
        (landX < target + 2 || landX > target + paddle.w - 2))

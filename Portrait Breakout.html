@@ -250,6 +250,8 @@
   let bricks = [], rows = 8, cols = 8, area = 0, gap = 3.5, padX = 12, rowCount = 8;
   let paddle = {x:0,y:0,w:90,h:14,targetX:0,vx:0};
   let ball = {x:0,y:0,vx:0,vy:0,r:7};
+  // 圆环捕手专属情绪：纯表现层状态，不参与任何碰撞、速度或瞄准计算。
+  let ringMood = {face:'🤪',t:0,cooldown:0,streak:0,comboT:0};
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -821,12 +823,14 @@
       o.vy=softNormal*ny+softTangent*ty;
       if(isMain){
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
+        ringMoodEvent(Math.random()<.62?'😏':'🤓',1.25);
         beep(390,.045,'sine',.025);
       }
     }else{
       // 外环壁是硬攻击面：使用完整挡板反射，再给予轻微加速。
       bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/R,-.92,.92));
       o.vx*=1.045;o.vy*=1.045;
+      if(isMain) ringMoodEvent('🤩',1.2);
     }
     return true;
   }
@@ -1943,6 +1947,7 @@
     syncUI();
   }
   function loseLife(){
+    ringMoodEvent('😣',1.5);
     lives = Math.max(0, lives - 1);
     hitCooldown = Math.max(hitCooldown, 1.2);   // 重新准备发球期间不被落砖连砸
     for(const e of extraBalls) e.retire();
@@ -1985,6 +1990,14 @@
     syncMusicPause();
   }
   function toastMsg(t){ toast = {text:t, t:3.5}; }
+
+  // 只在圆环挡板启用时触发；随机情绪只改变贴纸，不改变游戏规则。
+  function ringMoodEvent(face,duration){
+    if(shape!=='ring') return;
+    ringMood.face=face;
+    ringMood.t=duration||1.15;
+    ringMood.cooldown=.72;
+  }
 
   /* ---------- 音效 ---------- */
   function beep(f, d, type, vol){
@@ -2302,6 +2315,27 @@
   /* ---------- 物理 ---------- */
   function update(dt){
     time += dt;
+    if(shape==='ring' && state==='playing'){
+      ringMood.t=Math.max(0,ringMood.t-dt);
+      ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);
+      ringMood.comboT=Math.max(0,ringMood.comboT-dt);
+      if(ringMood.comboT===0) ringMood.streak=0;
+      // 飞行表情按概率抽取：🤪最常见，偶尔😂或😣，只影响视觉。
+      if(ringMood.t===0 && ringMood.cooldown===0){
+        const roll=Math.random();
+        ringMood.face=roll<.72?'🤪':(roll<.86?'😂':'😣');
+        ringMood.t=.9+Math.random()*.45;
+        ringMood.cooldown=1.7+Math.random()*2.1;
+      }
+      // 球高速下坠且偏离圆环中心时，偶尔露出惊险表情。
+      if(ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
+         Math.abs(ball.x-(paddle.x+paddle.w/2))>paddle.w*.43 &&
+         ringMood.cooldown===0 && Math.random()<.12){
+        ringMoodEvent('😱',.85);
+      }
+    } else if(state!=='paused'){
+      ringMood.t=0;
+    }
     if(level === 1 && firstLevelIntroT > 0 && state !== 'paused')
       firstLevelIntroT = Math.max(0, firstLevelIntroT - dt);
     if((hudTick++ % 6) === 0) syncSpeedHUD();   // 实测倍率连续读数
@@ -2480,7 +2514,13 @@
         ball.vx = -ball.vx;
         ball.x = px + (ball.vx > 0 ? -r - .5 : r + .5);
       }
+      const scoreBeforeHit=score;
       damageBrick(b.entityKind === 'galaga-diver' ? b.b : b);
+      if(shape==='ring' && score>scoreBeforeHit){
+        ringMood.streak=ringMood.comboT>0?ringMood.streak+1:1;
+        ringMood.comboT=2.2;
+        ringMoodEvent(ringMood.streak>=3?'😎':'😂',1.2);
+      }
       return;
     }
 
@@ -3666,6 +3706,20 @@
     bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, 'rgb(' + hotRGB + ')');
     ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
     ctx.restore();
+    // 圆环捕手表情贴纸：浮在主球旁边，短暂淡入淡出，不遮挡球心与拖尾。
+    if(shape==='ring' && state==='playing' && ringMood.t>0){
+      const mx=clamp(ball.x+ball.r*1.15,15,W-15), my=clamp(ball.y-ball.r*1.25,15,H-15);
+      const alpha=clamp(Math.min(1,ringMood.t/.22),0,1);
+      ctx.save();
+      ctx.globalAlpha=alpha;
+      ctx.fillStyle='rgba(8,16,38,.78)';
+      ctx.strokeStyle='rgba(190,225,255,.48)'; ctx.lineWidth=1;
+      roundRect(mx-13,my-12,26,24,11); ctx.fill(); ctx.stroke();
+      ctx.font='17px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif';
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.fillText(ringMood.face,mx,my+.5);
+      ctx.restore();
+    }
 
     // 多球砖分裂出的额外球：紫色短拖尾，和主球一眼可区分
     for(const e of extraBalls){

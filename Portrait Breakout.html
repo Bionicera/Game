@@ -723,6 +723,63 @@
     return true;
   }
 
+  // 有界的只读轨迹预测：以固定圆环几何模拟屏幕反射、内软壁、外硬壁与逻辑缺口。
+  // 仅用于传感器/规划器；不写回传入球体，也不触发音效、粒子或全局随机数。
+  function predictRingTrajectory(o,maxTime){
+    if(shape!=='ring'||!o)return {valid:false,etaInner:null,etaOuter:null,gapEta:null,gapPredictedX:null,gapPassable:false,events:[]};
+    const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
+    const horizon=clamp(Number.isFinite(maxTime)?maxTime:1.5,.08,2.4);
+    const speed=Math.hypot(o.vx||0,o.vy||0),dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/240,1/60);
+    const steps=Math.min(240,Math.ceil(horizon/dt));
+    const r=Math.max(1,o.r||ball.r),gap=RING_GAP_HALF(),throat=R-RING_WALL();
+    const clearHalf=Math.max(0,throat*Math.sin(gap)-r-.75);
+    let x=o.x,y=o.y,vx=o.vx||0,vy=o.vy||0,elapsed=0,prevRad=Math.hypot(x-cx,y-cy);
+    let etaInner=null,etaOuter=null,gapEta=null,gapPredictedX=null,gapPassable=false;
+    const events=[];
+    const angleGap=a=>Math.abs(Math.atan2(Math.sin(a+Math.PI/2),Math.cos(a+Math.PI/2)))<=gap;
+    const addEvent=(type,t,px,py)=>{if(events.length<8)events.push({type,eta:t,x:px,y:py});};
+    for(let i=0;i<steps;i++){
+      const px=x,py=y;
+      x+=vx*dt;y+=vy*dt;elapsed+=dt;
+      if(x-r<2){x=2+r;vx=Math.abs(vx);}
+      if(x+r>W-2){x=W-2-r;vx=-Math.abs(vx);}
+      if(y-r<2){y=2+r;vy=Math.abs(vy);}
+      const dx=x-cx,dy=y-cy,radial=Math.hypot(dx,dy)||1,angle=Math.atan2(dy,dx);
+      const inGap=angleGap(angle);
+      if(vy<0&&y<=cy-R-r&&inGap&&Math.abs(dx)<=clearHalf){
+        gapEta=elapsed;gapPredictedX=x;gapPassable=clearHalf>0;
+        addEvent('gap',elapsed,x,y);break;
+      }
+      const start=-Math.PI/2+gap;
+      const innerAngle=angle<start?angle+Math.PI*2:angle;
+      const innerLimit=ringInnerRadius(innerAngle)-r;
+      const outerLimit=R+r;
+      const radialVelocity=(vx*dx+vy*dy)/radial;
+      if(!inGap&&radialVelocity>0&&prevRad<innerLimit&&radial>=innerLimit){
+        etaInner=elapsed;addEvent('inner',elapsed,x,y);
+        const nx=-dx/radial,ny=-dy/radial,tx=-ny,ty=nx;
+        const vn=vx*nx+vy*ny,vt=vx*tx+vy*ty;
+        const sn=-vn*.28,st=vt*.94;
+        vx=sn*nx+st*tx;vy=sn*ny+st*ty;
+        const safe=Math.max(1,innerLimit-.8);
+        x=cx+dx/radial*safe;y=cy+dy/radial*safe;
+      }else if(!inGap&&radialVelocity<0&&prevRad>outerLimit&&radial<=outerLimit){
+        etaOuter=elapsed;addEvent('outer',elapsed,x,y);
+        const nx=dx/radial,ny=dy/radial,vn=vx*nx+vy*ny;
+        vx-=2*vn*nx;vy-=2*vn*ny;
+        const v=Math.hypot(vx,vy),cap=baseSpeed()*1.72,gain=v>0?Math.min(1.045,cap/v):1;
+        vx*=gain;vy*=gain;
+        const safe=outerLimit+.8;
+        x=cx+dx/radial*safe;y=cy+dy/radial*safe;
+      }
+      prevRad=Math.hypot(x-cx,y-cy);
+      if(etaInner!==null&&etaOuter!==null)break;
+    }
+    return {valid:true,etaInner,etaOuter,gapEta,gapPredictedX,
+      gapOffset:gapPredictedX===null?null:gapPredictedX-cx,gapHalfClearance:clearHalf,
+      gapPassable,events,simulatedTime:elapsed};
+  }
+
   // 第一阶段感知器：统一测量速度、趋势、圆环相对几何、缺口通行与近似碰撞时间。
   // 这是观测模型，不是物理模拟；预测值仅供决策参考，真实碰撞仍由 ringContact 负责。
   function updateRingSensor(dt,o){

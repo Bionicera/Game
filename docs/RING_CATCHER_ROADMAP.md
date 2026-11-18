@@ -419,3 +419,12 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 最新提交 `a6fe4eeb1f9656ad297e7334b4e57157b939132e` 对应 Actions run `44258425078` 的 Node Job 已完成：67/67 通过，0 失败。
 - 本轮 Node 失败均定位为跨 VM realm 空数组原型比较；三处断言均改为长度检查后全绿。甩球动作连续性新测试通过。
 - 同一 run 的 Chromium 30 秒实时 Auto smoke 仍在执行，尚未取得最终结论；不可提前记为全套 CI 通过。
+
+
+### 2026-11-18 · 本轮回归验收完成
+- Actions run `44258425078` 已完成，整体 conclusion 为 success。
+- Node Job：67/67 通过，0 失败。
+- Chromium Browser smoke：成功完成（Playwright/Chromium，包含现有 30 秒实时 Auto 与暂停/恢复/重开检查）。
+- 甩球动作连续性修复、紧急生存抢占边界测试均通过。
+- CI 链接：[run 44258425078](https://github.com/Bionicera/Game/actions/runs/44258425078)。
+- 说明：这是开发侧自动化验收，不代表已测得实际游戏甩球成功率，也不等于手机实测；仍按约定不发布、不部署 Pages。

@@ -729,8 +729,8 @@
     if(shape!=='ring'||!o)return {valid:false,etaInner:null,etaOuter:null,gapEta:null,gapPredictedX:null,gapPassable:false,events:[]};
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
     const horizon=clamp(Number.isFinite(maxTime)?maxTime:1.5,.08,2.4);
-    const speed=Math.hypot(o.vx||0,o.vy||0),dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/240,1/60);
-    const steps=Math.min(240,Math.ceil(horizon/dt));
+    const speed=Math.hypot(o.vx||0,o.vy||0),dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/1000,1/60);
+    const steps=Math.min(480,Math.ceil(horizon/dt));
     const r=Math.max(1,o.r||ball.r),gap=RING_GAP_HALF(),throat=R-RING_WALL();
     const clearHalf=Math.max(0,throat*Math.sin(gap)-r-.75);
     let x=o.x,y=o.y,vx=o.vx||0,vy=o.vy||0,elapsed=0,prevRad=Math.hypot(x-cx,y-cy);
@@ -826,6 +826,19 @@
       gapOffset=gapPredictedX-cx;
       gapPassable=gapHalfClearance>0&&Math.abs(gapOffset)<=gapHalfClearance;
     }
+    // 轨迹仿真发现明确事件时覆盖径向近似；无事件时保留近似值作为低置信度回退。
+    const trajectory=predictRingTrajectory(o,1.5);
+    if(trajectory.valid&&trajectory.events.length){
+      const innerEvent=trajectory.events.find(e=>e.type==='inner');
+      const outerEvent=trajectory.events.find(e=>e.type==='outer');
+      const gapEvent=trajectory.events.find(e=>e.type==='gap');
+      if(innerEvent)etaInner=innerEvent.eta;
+      if(outerEvent)etaOuter=outerEvent.eta;
+      if(gapEvent){
+        gapEta=gapEvent.eta;gapPredictedX=gapEvent.x;
+        gapOffset=gapPredictedX-cx;gapPassable=trajectory.gapPassable;
+      }
+    }
     const nextWall=etaInner!==null&&etaOuter!==null
       ? (etaInner<=etaOuter?'inner':'outer')
       : etaInner!==null?'inner':etaOuter!==null?'outer':null;
@@ -834,6 +847,7 @@
       vx,vy,direction:Math.atan2(vy,vx),radialDistance:radial,radialVelocity,angle,
       innerClearance,outerClearance,radialZone,gapHalfClearance,gapEta,gapPredictedX,gapOffset,gapPassable,
       etaInner,etaOuter,nextWall,kineticIndex:ratio*ratio,
+      trajectoryEvents:trajectory.events,trajectoryTime:trajectory.simulatedTime,
       updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:dt>1e-4?speedNow:ringSensor.previousSpeed,previousObject:dt>1e-4?o:ringSensor.previousObject
     };
     return ringSensor;

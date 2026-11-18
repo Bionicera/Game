@@ -134,7 +134,7 @@
     .sub .mult{font-size:9.5px;padding:1px 4px}
   }
 
-  /* 第二行：状态区在左，形状图标紧贴提示栏左边 */
+  /* 第二行：状态区在左，挡板选择器与 Auto 控件靠右排列 */
   .hud2 .hud-left{flex:0 0 auto;gap:9px}
   .hud-right{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0}
   .hud-right .auto-slot{gap:0;flex:0 0 auto}
@@ -3619,14 +3619,15 @@
       ctx.restore();
     }
 
-    // 事件提示（画布内文字，不是弹窗）
+    // 临时提示固定显示在挡板下方，避免占用右上角工具栏和主要游戏区域。
     if(toast){
       ctx.save();
       ctx.globalAlpha = clamp(toast.t, 0, 1);
       ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.font = '700 ' + Math.round(clamp(W * .05, 16, 23)) + 'px system-ui,sans-serif';
-      ctx.fillStyle = '#bfe6ff'; ctx.shadowColor = '#3d7fff'; ctx.shadowBlur = 14;
-      ctx.fillText(toast.text, W / 2, H * .63);
+      ctx.font = '700 ' + Math.round(clamp(W * .032, 12, 15)) + 'px system-ui,sans-serif';
+      ctx.fillStyle = '#bfe6ff'; ctx.shadowColor = '#3d7fff'; ctx.shadowBlur = 10;
+      const hintY = Math.min(H - 16, paddle.y + paddle.h + 17);
+      ctx.fillText(toast.text, W / 2, hintY, W - 28);
       ctx.restore();
     }
 

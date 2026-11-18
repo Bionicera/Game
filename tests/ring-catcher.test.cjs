@@ -41,6 +41,7 @@ function harness() {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
     shape: 'ring', state:'playing', W:800, autoPilot:false, aimPlan:null,
+    ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:0,lastAngle:0},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
     hitFx: null,

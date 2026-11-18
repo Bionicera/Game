@@ -1,0 +1,18 @@
+name: Ring Catcher Regression Tests
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Portrait Breakout.html'
+      - 'tests/ring-catcher.test.cjs'
+      - '.github/workflows/ring-catcher-tests.yml'
+  workflow_dispatch:
+jobs:
+  ring-catcher:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/ring-catcher.test.cjs

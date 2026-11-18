@@ -529,7 +529,7 @@
   const SEMI_R = () => paddle.w / 2;
   const MOON_H = () => paddle.w * .34;
   const RING_R = () => paddle.w * .47;
-  const RING_GAP_HALF = () => Math.asin(clamp((Math.max(1, ball.r * 3) / 2) / RING_R(), 0, .92));
+  const RING_GAP_HALF = () => Math.asin(clamp((Math.max(1, ball.r * 3)) / RING_R(), 0, .92));
   const RING_WALL = () => Math.max(5, Math.min(paddle.h * .72, RING_R() * .22));
   function shapeBodyH(){
     if(shape === 'triangle') return TRI_H();

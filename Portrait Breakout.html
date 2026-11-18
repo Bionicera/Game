@@ -147,6 +147,7 @@
   .shape.on{background:rgba(110,180,255,.22);border-color:rgba(140,215,255,.65);
     box-shadow:0 0 8px rgba(110,190,255,.28)}
   .shape.on svg{fill:#cdebff}
+  .shape.on[data-shape="ring"] svg path{stroke:#cdebff;opacity:1}
   .shape:active{transform:scale(.88)}
   .shapes.locked{opacity:.48}
   .shapes.locked .shape{cursor:not-allowed}
@@ -205,7 +206,7 @@
           <button class="shape" data-shape="moon" title="新月形挡板（凹面朝上）" aria-label="新月形挡板（凹面朝上）"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 7 Q20 39 38 7 Q20 18 2 7Z"/></svg></button>
           <button class="shape" data-shape="semicircle" title="半圆形挡板" aria-label="半圆形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 31A18 18 0 0 1 38 31Z"/></svg></button>
           <button class="shape" data-shape="triangle" title="等边三角形挡板" aria-label="等边三角形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3.3 36 31 4 31Z"/></svg></button>
-          <button class="shape" data-shape="ring" title="圆环挡板（顶部三球宽缺口）" aria-label="圆环挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3 A14 14 0 1 1 9.7 7.5 M20 9 A8 8 0 1 0 25.9 11.4" fill="none" stroke="currentColor" stroke-width="4.2" stroke-linecap="round"/></svg></button>
+          <button class="shape" data-shape="ring" title="圆环挡板（顶部三球宽缺口）" aria-label="圆环挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3 A14 14 0 1 1 9.7 7.5 M20 9 A8 8 0 1 0 25.9 11.4" fill="none" stroke="#8099c4" opacity=".82" stroke-width="4.2" stroke-linecap="round"/></svg></button>
         </div>
         <div class="tools auto-slot"><button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button></div>
       </div>

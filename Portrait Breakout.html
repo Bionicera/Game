@@ -1323,6 +1323,11 @@
         if(isMain&&autoPilot&&ringState.intent==='aim'&&ringPlanner.skill!=='safe-catch'){
           startRingCombo('sling',o);
           if(beginRingSling(o))advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
+          else{
+            ringCombo.index=Math.max(0,ringCombo.steps.length-1);
+            ringCombo.reason='甩球条件不足，安全回退';
+            recordRingEvaluation('cancel',{skill:'sling',reason:ringCombo.reason});
+          }
         }
       }
       recordRingEvaluation('inner',{skill:'capture',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});

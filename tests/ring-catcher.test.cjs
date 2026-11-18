@@ -70,7 +70,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,
+      updateRingSensor,updateRingState,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       set shape(v){shape=v},get shape(){return shape}
     };

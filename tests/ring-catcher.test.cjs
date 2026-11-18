@@ -33,15 +33,15 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'planRingSkill', 'updateRingPlanner', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
   const context = {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
-    shape: 'ring', state:'playing', W:800, autoPilot:false, aimPlan:null,
-    ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:0,lastAngle:0},
+    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null,
+    ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
     hitFx: null,
@@ -52,6 +52,8 @@ function harness() {
       valid: false, speed: 0, speedRatio: 0, speedClass: 'stopped', acceleration: 0,
       speedTrend: 'stable', previousSpeed: null, previousObject: null, updatedAt: 0
     },
+    ringPlanner:{skill:'recover',targetX:null,reason:'',confidence:0,focus:null,phase:'idle',updatedAt:0},
+    ringEvaluator:{requested:0,accepted:0,completed:0,cancelled:0,innerContacts:0,outerContacts:0,slows:0,boosts:0,guides:0,slingReleases:0,lastSpeed:0,lastSkill:'recover',events:[]},
     ringState: {
       valid: false, mode: 'attack', priority: 'normal', intent: 'boost',
       reason: '', confidence: 0, hold: 0, updatedAt: 0, focus: null
@@ -71,9 +73,9 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,planRingSkill,updateRingPlanner,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
-      get sling(){return ringSling},set auto(v){autoPilot=v},set worldWidth(v){W=v},set aim(v){aimPlan=v},
+      get sling(){return ringSling},get planner(){return ringPlanner},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
@@ -344,4 +346,59 @@ test('production ringContact starts sling on inner capture and releases at the r
   assert.equal(h.ringContact(releaseBall,releaseBall.x,releaseBall.y,true,p.x,p.x),true);
   assert.ok(releaseBall.vx>0&&releaseBall.vy<0,'the actual production collision should fling through the right-side gap tip');
   assert.equal(h.sling.phase,'cooldown');
+});
+
+
+test('RingPlanner prioritizes survival, then gap guidance, capture, boost, and steering', () => {
+  const h=harness(),focus={x:400,y:300,vx:0,vy:500,r:8};
+  h.auto=true;
+  const base={valid:true,speedRatio:.6,speedClass:'slow',speedTrend:'stable',gapEta:null,gapPassable:false,
+    gapPredictedX:null,etaInner:null,radialZone:'outside'};
+  let p=h.planRingSkill(base,{intent:'boost'},focus);
+  assert.equal(p.skill,'boost');
+  const fast={...base,speedRatio:1.4,speedClass:'fast',speedTrend:'stable',etaInner:.2};
+  assert.equal(h.planRingSkill(fast,{intent:'control'},focus).skill,'capture');
+  const gap={...base,gapEta:.1,gapPassable:true,gapPredictedX:430};
+  assert.equal(h.planRingSkill(gap,{intent:'guide-through'},focus).skill,'gap-guide');
+  const danger={...base};
+  const falling={x:400,y:820,vx:0,vy:300,r:8};
+  assert.equal(h.planRingSkill(danger,{intent:'boost'},falling).skill,'safe-catch');
+});
+
+test('RingPlanner guide and gap targets move the ring toward the ball path', () => {
+  const h=harness(),focus={x:520,y:400,vx:0,vy:100,r:8};
+  const sensor={valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'stable',gapEta:null,
+    gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'inside'};
+  const plan=h.planRingSkill(sensor,{intent:'aim'},focus);
+  assert.equal(plan.skill,'guide');
+  assert.ok(plan.targetX<focus.x,'paddle target is left edge coordinate centered beneath the ball');
+  const gap=h.planRingSkill({...sensor,gapEta:.12,gapPassable:true,gapPredictedX:600},{intent:'guide-through'},focus);
+  assert.equal(gap.skill,'gap-guide');
+  assert.ok(gap.targetX>plan.targetX);
+});
+
+test('RingEvaluator keeps bounded event history and records real wall energy outcomes', () => {
+  const h=harness();
+  for(let i=0;i<60;i++)h.recordRingEvaluation('guide',{skill:'guide'});
+  assert.equal(h.evaluator.events.length,48);
+  h.recordRingEvaluation('inner',{skill:'capture',before:400,after:200});
+  h.recordRingEvaluation('outer',{skill:'boost',before:200,after:220});
+  h.recordRingEvaluation('sling',{skill:'sling',before:220,after:350});
+  assert.equal(h.evaluator.slows,1);
+  assert.equal(h.evaluator.boosts,1);
+  assert.equal(h.evaluator.slingReleases,1);
+});
+
+test('RingPlanner changes are evaluated once per transition and reset on mode loss', () => {
+  const h=harness(),focus={x:400,y:300,vx:0,vy:0,r:8};
+  h.auto=true;
+  h.updateRingSensor(0,focus);
+  h.updateRingState(h.sensor,0,focus);
+  h.updateRingPlanner(.016,focus);
+  const requests=h.evaluator.requested;
+  h.updateRingPlanner(.016,focus);
+  assert.equal(h.evaluator.requested,requests,'same skill should not create repeated requests');
+  h.shape='rect';
+  h.updateRingPlanner(.016,focus);
+  assert.equal(h.planner.skill,'recover');
 });

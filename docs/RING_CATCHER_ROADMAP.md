@@ -378,8 +378,9 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 仲裁时序修复：每帧先更新 RingPlanner 的当前安全优先级，再推进 RingSling，避免甩球执行器读取上一帧过期的 safe-catch 状态。
 - 回归测试：覆盖 boost/control/aim/guide-through 四种意图下真实内环碰撞均能启动甩球；另覆盖 safe-catch 抑制启动及冷却不被覆盖。当前 Node 测试定义总数：68。
 - 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`。
+- 浏览器回归：Chromium 测试桥现在刻意把真实内环接触时的 RingState.intent 设为 `boost`、Planner.skill 设为 `capture`，确认生产 `ringContact` 仍会启动甩球，而不是只在单测 harness 中成立。
 - 验证状态：生产代码与回归测试已提交 main；GitHub Actions 由 main push 自动触发，尚未取得本次提交的可核验 job 结果，不把测试定义数当作通过数。
 - 手机实测：未测试。
 - 下一步：核验本次 Node/Chromium Actions；继续测试从真实捕捉到震荡、短冲、刀锋端释放的完整自动链，以及不同球速/目标方向下的释放成功率。
 - 生产代码 Commit：`f7b4a6fb6fafccbdfc07e562def9403f52070669`。
-- 测试 Commit：`80e7d3ead8eacd31c68f6a05606a54ef3996cc2a`。
+- 测试 Commit：`80e7d3ead8eacd31c68f6a05606a54ef3996cc2a`；Chromium 回归 Commit：`ca9e0d23ff44780c1a2ef297948389a4a2344014`。

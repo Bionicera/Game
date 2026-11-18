@@ -635,7 +635,10 @@
         if(ringSling.halfSwings>=ringSling.cyclesTarget*2){
           ringSling.phase='dash';
           ringSling.dashStartX=paddle.x;
-          ringSling.dashDistance=clamp(RING_R()*(.12+.055*ringSling.cyclesTarget),18,RING_R()*.34);
+          const aimX=aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:paddle.x+paddle.w/2;
+          const targetOffset=clamp(Math.abs(aimX-(paddle.x+paddle.w/2))/Math.max(1,W*.5),0,1);
+          // 短冲距离只由目标方向/偏移决定；震荡次数只决定甩出速度，两者不互相串扰。
+          ringSling.dashDistance=clamp(RING_R()*(.12+.22*targetOffset),18,RING_R()*.34);
           ringSling.targetX=clamp(paddle.x+ringSling.dashDir*ringSling.dashDistance,2,W-paddle.w-2);
         }else{
           const sign=ringSling.halfSwings%2===0?ringSling.dashDir:-ringSling.dashDir;

@@ -746,7 +746,7 @@ test('RingSensor clears stale trajectory and gap observations when focus is abse
   assert.equal(invalid.etaInner,null);
   assert.equal(invalid.etaOuter,null);
   assert.equal(invalid.gapEta,null);
-  assert.deepEqual(invalid.trajectoryEvents,[]);
+  assert.equal(invalid.trajectoryEvents.length,0);
 });
 
 test('RingSensor and trajectory predictor reject overflowed derived radial velocity', () => {

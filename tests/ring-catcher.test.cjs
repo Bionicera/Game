@@ -33,18 +33,18 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
   const context = {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
-    shape: 'ring',
+    shape: 'ring', state:'playing', W:800, autoPilot:false, aimPlan:null,
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
     hitFx: null,
-    ringMoodEvent: () => {}, ringMoodRandom: () => .5, beep: () => {}, particles: [], autoPilot: false,
+    ringMoodEvent: () => {}, ringMoodRandom: () => .5, beep: () => {}, particles: [],
     curse: {drunkT:0,friction:0}, PADDLE_MAX_V:900, FRICTION:.02, FRICTION_CAP:.3,
     baseSpeed: () => 300,
     ringSensor: {
@@ -70,8 +70,9 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
+      get sling(){return ringSling},set auto(v){autoPilot=v},set worldWidth(v){W=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
@@ -245,4 +246,67 @@ test('production physics retains soft inner wall and accelerated outer wall', ()
   assert.match(ringContact,/softNormal=-vn\*\.28/);
   assert.match(ringContact,/softTangent=vt\*\.94/);
   assert.match(ringContact,/o\.vx\*=1\.045;o\.vy\*=1\.045/);
+});
+
+
+test('sling skill is gated to Auto ring play and selects more cycles for low-speed balls', () => {
+  const h=harness(), slow={x:200,y:420,vx:60,vy:0,r:8};
+  assert.equal(h.beginRingSling(slow),false);
+  h.auto=true;
+  assert.equal(h.beginRingSling(slow),true);
+  assert.equal(h.sling.phase,'oscillate');
+  assert.equal(h.sling.cyclesTarget,4);
+  const fastHarness=harness();fastHarness.auto=true;
+  assert.equal(fastHarness.beginRingSling({x:200,y:420,vx:540,vy:0,r:8}),true);
+  assert.equal(fastHarness.sling.cyclesTarget,1);
+});
+
+test('sling performs alternating oscillations, then a one-way short dash and release window', () => {
+  const h=harness();h.auto=true;
+  const o={x:200,y:420,vx:60,vy:0,r:8};
+  assert.equal(h.beginRingSling(o),true);
+  const cycles=h.sling.cyclesTarget;
+  for(let i=0;i<cycles*2;i++){
+    h.paddle.x=h.sling.targetX;
+    h.updateRingSling(.016,o);
+    if(i<cycles*2-1) assert.equal(h.sling.phase,'oscillate');
+  }
+  assert.equal(h.sling.phase,'dash');
+  assert.ok(h.sling.dashDistance>0);
+  h.paddle.x=h.sling.targetX;
+  h.updateRingSling(.016,o);
+  assert.equal(h.sling.phase,'release');
+});
+
+test('sling releases only at the opposite real gap tip; short-dash length controls exit angle', () => {
+  const h=harness();h.auto=true;
+  const o={x:200,y:420,vx:100,vy:0,r:8};
+  h.beginRingSling(o);
+  h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=35;h.sling.cyclesTarget=2;
+  const R=94,cx=200,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+  const wrong={kind:'inner',q:{x:cx+R*Math.cos(tip+.8),y:cy+R*Math.sin(tip+.8)}};
+  assert.equal(h.tryReleaseRingSling(o,wrong,true),false);
+  const tipContact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
+  assert.equal(h.tryReleaseRingSling(o,tipContact,true),true);
+  assert.equal(h.sling.phase,'cooldown');
+  assert.ok(o.vy<0&&o.vx>0,'release should launch upward through the selected right-side opening');
+  const shortAngle=h.sling.lastAngle;
+  const h2=harness();h2.auto=true;h2.beginRingSling({x:200,y:420,vx:100,vy:0,r:8});
+  h2.sling.phase='release';h2.sling.exitSide=1;h2.sling.dashDistance=65;h2.sling.cyclesTarget=2;
+  const o2={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h2.tryReleaseRingSling(o2,tipContact,true),true);
+  assert.ok(h2.sling.lastAngle>shortAngle,'longer dash should produce a wider release angle');
+  assert.ok(Math.hypot(o2.vx,o2.vy)>Math.hypot(o.vx,o.vy)*.99);
+});
+
+test('sling aborts cleanly when Auto is disabled or the focus ball changes', () => {
+  const h=harness();h.auto=true;
+  const a={x:200,y:420,vx:100,vy:0,r:8},b={x:210,y:420,vx:100,vy:0,r:8};
+  h.beginRingSling(a);
+  h.updateRingSling(.016,b);
+  assert.equal(h.sling.phase,'idle');
+  h.beginRingSling(a);
+  h.auto=false;
+  h.updateRingSling(.016,a);
+  assert.equal(h.sling.phase,'idle');
 });

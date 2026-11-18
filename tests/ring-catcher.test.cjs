@@ -248,7 +248,7 @@ test('production physics retains soft inner wall and accelerated outer wall', ()
   const ringContact = extractFunction('ringContact');
   assert.match(ringContact,/softNormal=-vn\*\.28/);
   assert.match(ringContact,/softTangent=vt\*\.94/);
-  assert.match(ringContact,/o\.vx\*=1\.045;o\.vy\*=1\.045/);
+  assert.match(ringContact,/speedCap=baseSpeed\(\)\*1\.72/);\n  assert.match(ringContact,/Math\.min\(1\.045,speedCap\/afterReflect\)/);
 });
 
 
@@ -401,4 +401,43 @@ test('RingPlanner changes are evaluated once per transition and reset on mode lo
   h.shape='rect';
   h.updateRingPlanner(.016,focus);
   assert.equal(h.planner.skill,'recover');
+});
+
+
+test('sling has bounded phase timeouts and aborts instead of hanging', () => {
+  const h=harness();h.auto=true;
+  const o={x:200,y:420,vx:60,vy:0,r:8};
+  h.beginRingSling(o);
+  h.updateRingSling(3.3,o);
+  assert.equal(h.sling.phase,'cooldown');
+  assert.equal(h.sling.abortReason,'阶段超时');
+  assert.equal(h.evaluator.cancelled,1);
+});
+
+test('sling uses a reachable oscillation center near either screen edge', () => {
+  const h=harness();h.auto=true;
+  h.paddle.x=2;
+  assert.equal(h.beginRingSling({x:110,y:420,vx:100,vy:0,r:8}),true);
+  assert.ok(h.sling.targetX>=2&&h.sling.targetX<=h.worldWidth-202);
+  assert.ok(h.sling.amplitude>=9);
+});
+
+test('outer-wall boost is capped at 1.72 times base speed', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R;
+  const cap=300*1.72;
+  const o={x:p.x+p.w/2+R+8-.5,y:cy,vx:-cap*1.1,vy:0,r:8};
+  assert.equal(h.ringContact(o,o.x+2,o.y,true,p.x,p.x),true);
+  assert.ok(Math.hypot(o.vx,o.vy)<=cap+1e-6,'outer-wall energy must stay under the skill cap');
+});
+
+test('skill planner does not write ball position or velocity', () => {
+  const source=extractFunction('planRingSkill')+extractFunction('updateRingPlanner');
+  assert.doesNotMatch(source,/(?:focus|ball|o)\.(?:x|y|vx|vy)\s*=/);
+});
+
+test('ring skill evaluator only retains the latest 48 records', () => {
+  const h=harness();
+  for(let i=0;i<100;i++)h.recordRingEvaluation('request',{skill:'guide'});
+  assert.equal(h.evaluator.events.length,48);
+  assert.equal(h.evaluator.requested,100);
 });

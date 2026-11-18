@@ -15,7 +15,17 @@ const { chromium } = require('playwright');
   window.__ringTest = {
     snapshot(){
       return {shape,autoPilot,state,canvasWidth:canvas.width,canvasHeight:canvas.height,
-        sling:{...ringSling},combo:{...ringCombo},evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
+        sling:{...ringSling},combo:{...ringCombo},planner:{...ringPlanner},sensor:{...ringSensor},
+        evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
+    },
+    startLiveAuto(){
+      shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';
+      const R=RING_R(),cy=paddle.y+paddle.h-R;
+      ball.x=paddle.x+paddle.w/2;ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;
+      ball.vx=140;ball.vy=-260;ringState.intent='aim';beep=()=>{};syncUI();
+    },
+    chooseRing(){
+      shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
     },
     plannerMatrix(){
       const focus={x:paddle.x+paddle.w/2,y:paddle.y-100,vx:0,vy:120,r:ball.r};
@@ -112,7 +122,21 @@ const { chromium } = require('playwright');
     }));
     assert.ok(canvas.width>0&&canvas.height>0&&canvas.context,'Canvas should initialize in Chromium');
     assert.deepEqual(pageErrors,[],'browser should have no uncaught page errors');
-    process.stdout.write('Browser smoke passed: Canvas startup, inner capture, paddle-driven oscillation, short dash, focus-locked real gap-tip sling release.\\n');
+    const livePage=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
+    const liveErrors=[];
+    livePage.on('pageerror',e=>liveErrors.push(e.message));
+    await livePage.setContent(html,{waitUntil:'load'});
+    await livePage.waitForFunction(()=>document.querySelector('#cover')?.classList.contains('dismissed'),null,{timeout:5000});
+    await livePage.evaluate(()=>window.__ringTest.startLiveAuto());
+    await livePage.waitForTimeout(4500);
+    const live=await livePage.evaluate(()=>window.__ringTest.snapshot());
+    for(const key of ['x','y','vx','vy'])assert.ok(Number.isFinite(live.ball[key]),'live Auto ball '+key+' must stay finite');
+    assert.equal(live.shape,'ring');
+    assert.equal(live.autoPilot,true);
+    assert.equal(live.sensor.valid,true,'live RingSensor should stay active during browser play');
+    assert.ok(live.evaluator.events.length<=48,'live evaluator history must remain bounded');
+    assert.deepEqual(liveErrors,[],'live browser play should have no uncaught page errors');
+    process.stdout.write('Browser smoke passed: Canvas startup, planner matrix, full sling sequence, and 4.5s live Ring Auto simulation.\\n');
   } finally {
     await browser.close();
   }

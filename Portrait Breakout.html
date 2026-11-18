@@ -543,8 +543,8 @@
   function ringAimContactY(rel,r){
     const R=RING_R(),cy=paddle.y+paddle.h-R,off=ringAimOffset(rel);
     if(ringAimMode(rel,r)==='capture'){
-      const ri=R-RING_WALL(),a=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
-      return cy+ringInnerRadius(a)*Math.sin(a)-r;
+      // 捕捉模型瞄准的是顶部缺口的通行中心线，不是内环底壁的碰撞点。
+      return cy-R-r;
     }
     return cy-Math.sqrt(Math.max(0,(R+r)*(R+r)-off*off));
   }
@@ -811,10 +811,23 @@
     const px=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
     o.x=px+contact.q.x+contact.n.x*(o.r+.6);
     o.y=contact.q.y+contact.n.y*(o.r+.6);
-    bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/R,-.92,.92));
-    // 内壁软捕捉，明显耗散动能；外壁硬攻击，轻微做功加速。
-    const wallGain=contact.kind==='inner'?.90:1.045;
-    o.vx*=wallGain;o.vy*=wallGain;
+    if(contact.kind==='inner'){
+      // 内壁是软捕捉/导向面：压低法向反弹，保留大部分切向运动，让球沿不规则内壁滑行并逐步减速。
+      const nx=contact.n.x,ny=contact.n.y,tx=-ny,ty=nx;
+      const rvx=o.vx-paddle.vx,rvy=o.vy;
+      const vn=rvx*nx+rvy*ny,vt=rvx*tx+rvy*ty;
+      const softNormal=-vn*.28,softTangent=vt*.94;
+      o.vx=paddle.vx+softNormal*nx+softTangent*tx;
+      o.vy=softNormal*ny+softTangent*ty;
+      if(isMain){
+        hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
+        beep(390,.045,'sine',.025);
+      }
+    }else{
+      // 外环壁是硬攻击面：使用完整挡板反射，再给予轻微加速。
+      bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/R,-.92,.92));
+      o.vx*=1.045;o.vy*=1.045;
+    }
     return true;
   }
 
@@ -1876,7 +1889,13 @@
   }
   function snapBall(){
     ball.x = paddle.x + paddle.w / 2;
-    ball.y = surfaceY(.5) - ball.r - 2;
+    // 圆环捕手的待发球位置固定在内腔底部；顶部缺口只负责瞄准，不是出生点。
+    if(shape === 'ring'){
+      const cy=paddle.y+paddle.h-RING_R();
+      ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;
+    }else{
+      ball.y = surfaceY(.5) - ball.r - 2;
+    }
     ball.vx = 0; ball.vy = 0;
   }
   function launch(){
@@ -1889,7 +1908,13 @@
     const a = (Math.random() - .5) * .7, sp = speed();
     ball.vx = Math.sin(a) * sp;
     ball.vy = -Math.cos(a) * sp;
-    ball.y = surfaceY(.5) - ball.r - 1;
+    // 发球沿用 snapBall 的位置；圆环球从内腔底部向上运动，穿过缺口出环。
+    if(shape === 'ring'){
+      const cy=paddle.y+paddle.h-RING_R();
+      ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-1;
+    }else{
+      ball.y = surfaceY(.5) - ball.r - 1;
+    }
     trail.length = 0;
     beep(680, .08, 'triangle', .06);
     syncUI();

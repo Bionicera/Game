@@ -1930,7 +1930,7 @@
         musicComp.threshold.value=-23; musicComp.knee.value=18; musicComp.ratio.value=3.2;
         musicComp.attack.value=.012; musicComp.release.value=.24;
         musicMaster=actx.createGain(); musicMaster.gain.value=0;
-        musicFilter.connect(musicComp); musicComp.connect(musicMaster); musicMaster.connect(actx.destination);
+        musicMaster.connect(musicFilter); musicFilter.connect(musicComp); musicComp.connect(actx.destination);
       }
       musicEnabled=true;
       $('btnMusic').textContent='♫'; $('btnMusic').setAttribute('aria-pressed','true');

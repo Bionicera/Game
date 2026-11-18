@@ -20,11 +20,8 @@ jobs:
 
   browser-smoke:
     runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-      - run: npm install --no-save playwright
-      - run: npx playwright install --with-deps chromium
+      - run: npm install --no-save playwright@1.56.1
       - run: node tests/ring-browser-smoke.cjs

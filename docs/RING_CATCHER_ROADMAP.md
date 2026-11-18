@@ -325,7 +325,7 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 ## 当前状态
 
 **当前焦点：圆环捕手已完成第一轮集成，正在进行传感器失效恢复、数值溢出隔离和长时 Chromium Auto 压力回归。**  
-已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 64 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
+已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 66 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
 
 
 ### 2026-11-18 · 稳健性加固 · 非有限物理输入与极端预测
@@ -364,7 +364,7 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 改动文件：`tests/ring-catcher.test.cjs`。
 - 新增测试：活动甩球时切换焦点球必须回到 idle 并记录取消；单帧超过震荡阶段时限必须进入 cooldown，且不能在同一大帧跳过 0.45 秒安全冷却；Planner 提出 safe-catch 时必须立即中断甩球并进入 cooldown。
 - 生产代码：本次未修改，针对现有 `updateRingSling` 的既有保护逻辑增加生产函数回归。
-- 静态/单元/浏览器验证：提交已写入 main；本次新增的 3 项测试尚未取得可核验的 Actions 结果，不能记为通过。当前总数为 64 项测试定义。
+- 静态/单元/浏览器验证：提交已写入 main；本次新增的 3 项测试尚未取得可核验的 Actions 结果，不能记为通过。当前总数为 66 项测试定义。
 - 手机实测：未测试。
 - 已知问题：GitHub 连接器目前可核验提交与 combined status，但本轮相关提交未返回可见 status checks；需通过 Actions 页面确认对应 Node 与 Browser job 的实际运行结果。
 - 下一步：继续补齐 Auto 关闭、暂停恢复、失焦恢复和帧时抖动的浏览器生命周期验证；优先取得本轮 Node/Chromium CI 结果后再宣告测试通过。

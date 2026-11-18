@@ -848,6 +848,7 @@
       gapEta=(gapY-o.y)/vy;
       gapPredictedX=reflectScreenX(o.x+vx*gapEta,o.r);
       gapOffset=gapPredictedX-cx;
+      if(!Number.isFinite(gapEta)||!Number.isFinite(gapPredictedX)||!Number.isFinite(gapOffset))return invalidate();
       gapPassable=gapHalfClearance>0&&Math.abs(gapOffset)<=gapHalfClearance;
     }
     // 轨迹仿真发现明确事件时覆盖径向近似；无事件时保留近似值作为低置信度回退。

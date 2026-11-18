@@ -32,13 +32,16 @@ const { chromium } = require('playwright');
     chooseRing(){
       shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
       autoPilot=true;state='playing';ringState.intent='aim';ringPlanner.skill='attack';beep=()=>{};
+      window.requestAnimationFrame=()=>0;
     },
     innerCapture(){
       const R=RING_R(),cy=paddle.y+paddle.h-R,a=0;
       const rr=ringInnerRadius(a),nx=-1,ny=0;
       const qx=paddle.w/2+rr,qy=cy;
-      const o={x:paddle.x+qx+nx*(ball.r-.5),y:qy+ny*(ball.r-.5),
-        vx:-nx*220,vy:-ny*220,r:ball.r};
+      const o=ball;
+      o.x=paddle.x+qx+nx*(o.r-.5);o.y=qy+ny*(o.r-.5);
+      o.vx=-nx*220;o.vy=-ny*220;
+      ringState.intent='aim';ringPlanner.skill='attack';
       testSlingBall=o;
       const hit=ringContact(o,o.x,o.y,true,paddle.x,paddle.x);
       return {hit,phase:ringSling.phase,ball:{...o},cycles:ringSling.cyclesTarget};
@@ -83,6 +86,7 @@ const { chromium } = require('playwright');
     await page.setContent(html,{waitUntil:'load'});
     await page.waitForFunction(() => document.querySelector('#cover')?.classList.contains('dismissed'),null,{timeout:5000});
     await page.evaluate(() => window.__ringTest.chooseRing());
+    await page.waitForTimeout(40); // drain the already queued animation frame after disabling the loop
     const skills=await page.evaluate(() => window.__ringTest.plannerMatrix());
     assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'guide',safe:'safe-catch'},
       'browser planner should arbitrate the complete base skill set');

@@ -627,3 +627,13 @@ test('RingPlanner handles imminent inner-wall collision before a later gap oppor
     gapEta:.3,gapPassable:true,gapPredictedX:200,etaInner:.08,etaOuter:null,nextWall:'inner',radialZone:'wall-band'};
   assert.equal(h.planRingSkill(sensor,{intent:'guide-through'},focus).skill,'capture');
 });
+
+
+test('RingSensor wall ETA follows the first trajectory event, not a later straight-line estimate', () => {
+  const h=harness(),o={x:260,y:420,vx:0,vy:-300,r:8};
+  const s=h.updateRingSensor(.016,o);
+  assert.equal(s.trajectoryEvents[0].type,'inner');
+  assert.equal(s.nextWall,'inner');
+  assert.ok(s.etaInner>0);
+  assert.equal(s.gapPassable,false);
+});

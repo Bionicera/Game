@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -793,4 +793,33 @@ test('RingSling survival catch preempts oscillation before dash or release', () 
   assert.equal(h.sling.cooldown,.45);
   assert.equal(h.sling.focus,null);
   assert.equal(h.evaluator.cancelled,1);
+});
+
+
+test('every eligible main-ball inner capture starts sling regardless of transient RingState intent', () => {
+  for (const intent of ['boost','control','aim','guide-through']) {
+    const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(0);
+    h.auto=true;h.sensor.valid=true;h.state.intent=intent;h.planner.skill='capture';
+    const o={x:p.x+p.w/2+ri-8+.5,y:cy,vx:300,vy:50,r:8};
+    assert.equal(h.ringContact(o,o.x-2,o.y,true,p.x,p.x),true,'inner collision should be real');
+    assert.equal(h.sling.phase,'oscillate','capture should hand off to sling for intent '+intent);
+    assert.equal(h.sling.focus,o);
+    assert.equal(h.combo.name,'sling');
+    assert.equal(h.combo.steps[h.combo.index],'oscillate');
+  }
+});
+
+test('inner capture does not start sling during survival preemption or an existing cooldown', () => {
+  const pCase=()=>{
+    const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(0);
+    h.auto=true;h.sensor.valid=true;
+    const o={x:p.x+p.w/2+ri-8+.5,y:cy,vx:300,vy:50,r:8};
+    return {h,o,hit:()=>h.ringContact(o,o.x-2,o.y,true,p.x,p.x)};
+  };
+  const safe=pCase();safe.h.planner.skill='safe-catch';
+  assert.equal(safe.hit(),true);
+  assert.equal(safe.h.sling.phase,'idle','survival catch must suppress sling start');
+  const cooldown=pCase();cooldown.h.sling.phase='cooldown';cooldown.h.sling.cooldown=.3;
+  assert.equal(cooldown.hit(),true);
+  assert.equal(cooldown.h.sling.phase,'cooldown','a capture must not overwrite an active cooldown');
 });

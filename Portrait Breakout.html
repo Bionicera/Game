@@ -764,6 +764,7 @@
       const innerLimit=ringInnerRadius(innerAngle)-r;
       const outerLimit=R+r;
       const radialVelocity=(vx*dx+vy*dy)/radial;
+      if(!Number.isFinite(radialVelocity))return invalid();
       if(!inGap&&radialVelocity>0&&prevRad<innerLimit&&radial>=innerLimit){
         etaInner=elapsed;addEvent('inner',elapsed,x,y);
         const nx=-dx/radial,ny=-dy/radial,tx=-ny,ty=nx;
@@ -828,6 +829,7 @@
     const speedTrend=acceleration>trendLimit?'accelerating':acceleration< -trendLimit?'decelerating':'stable';
     const speedClass=speedNow<1?'stopped':ratio<.35?'crawl':ratio<.82?'slow':ratio<1.18?'cruise':ratio<1.65?'fast':'extreme';
     const radialVelocity=radial>1?(vx*dx+vy*dy)/radial:0;
+    if(!Number.isFinite(radialVelocity))return invalidate();
     const innerRadius=ringInnerRadius(innerAngle),innerTarget=Math.max(0,innerRadius-o.r),outerTarget=Math.max(0,R-o.r);
     const innerClearance=innerTarget-radial,outerClearance=outerTarget-radial;
     const radialZone=radial<innerTarget?'inside':radial<outerTarget?'wall-band':'outside';

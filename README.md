@@ -1,4 +1,4 @@
-# Game
+# 彩虹星河 · Rainbow Galaxy
 
 ## 📱 手机浏览器试玩
 
@@ -6,7 +6,7 @@
   <img src="https://img.shields.io/badge/%E6%89%8B%E6%9C%BA%E6%B5%8F%E8%A7%88%E5%99%A8-%E7%AB%8B%E5%8D%B3%E8%AF%95%E7%8E%A9-16a34a?style=for-the-badge" alt="手机浏览器打开游戏：立即试玩">
 </a>
 
-也可以直接打开：[Portrait Breakout · 竖屏打砖块](https://raw.githack.com/Bionicera/Game/main/Portrait%20Breakout.html)
+也可以直接打开：[彩虹星河 · Rainbow Galaxy](https://raw.githack.com/Bionicera/Game/main/Portrait%20Breakout.html)
 
 > 首次打开时，托管服务可能会显示一次 HTML 安全确认页，确认后即可进入游戏。此试玩链接用于开发测试；仓库更新后，页面缓存可能需要几分钟刷新。
 

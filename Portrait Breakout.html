@@ -836,6 +836,8 @@
       const innerEvent=trajectory.events.find(e=>e.type==='inner');
       const outerEvent=trajectory.events.find(e=>e.type==='outer');
       const gapEvent=trajectory.events.find(e=>e.type==='gap');
+      // 轨迹仿真报告的是首事件，清除径向直线模型可能产生的后续伪 ETA。
+      etaInner=null;etaOuter=null;
       if(innerEvent)etaInner=innerEvent.eta;
       if(outerEvent)etaOuter=outerEvent.eta;
       if(gapEvent){

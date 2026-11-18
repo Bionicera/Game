@@ -336,7 +336,7 @@ test('sling oscillation count changes release speed while equal dash distance ke
 
 
 test('production ringContact starts sling on inner capture and releases at the real opposite tip', () => {
-  const h=harness();h.auto=true;
+  const h=harness();h.auto=true;h.state.intent='aim';h.planner.skill='attack';
   const p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R),tip=-Math.PI/2+gap;
   const nx=-Math.cos(tip),ny=-Math.sin(tip);
   const qx=p.w/2+R*Math.cos(tip),qy=cy+R*Math.sin(tip);

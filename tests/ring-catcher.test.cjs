@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -74,7 +74,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
@@ -484,4 +484,26 @@ test('RingCombo selects charge and sling recipes with the expected skill order',
   assert.equal(h.advanceRingCombo('dash'),true);
   assert.equal(h.advanceRingCombo('sling-release'),true);
   assert.equal(h.combo.steps[h.combo.index],'attack');
+});
+
+
+test('ringAimReflect applies a hard speed ceiling to attack-mode predictions', () => {
+  const h=harness();
+  const out=h.ringAimReflect(9000,-9000,.9,0,8);
+  assert.equal(out.mode,'attack');
+  assert.ok(Math.hypot(out.vx,out.vy)<=300*1.72+1e-6);
+});
+
+test('RingPlanner keeps a higher-priority unload combo when the instantaneous skill shifts to guide', () => {
+  const h=harness(),focus={x:400,y:300,vx:0,vy:0,r:8};
+  h.auto=true;
+  h.updateRingSensor(0,focus);
+  h.sensor.speedRatio=1.4;h.sensor.speedClass='fast';h.sensor.speedTrend='stable';
+  h.updateRingState(h.sensor,0,focus);
+  h.updateRingPlanner(.016,focus);
+  assert.equal(h.combo.name,'unload');
+  h.sensor.speedRatio=.9;h.sensor.speedClass='cruise';h.sensor.radialZone='inside';
+  h.updateRingState(h.sensor,.3,focus);
+  h.updateRingPlanner(.016,focus);
+  assert.equal(h.combo.name,'unload','control intent must not interrupt a higher-priority unload recipe');
 });

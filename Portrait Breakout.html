@@ -1,0 +1,3425 @@
+<!--
+作者：
+第一作者：元宝
+第二作者：ChatGPT
+第三作者：Bionicera
+策划：Bionicera
+-->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#070b18">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>打砖块 · 竖屏版</title>
+<style>
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#070b18;
+    overscroll-behavior:none;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+  #app{position:fixed;top:0;left:0;right:0;height:100vh;height:100dvh;overflow:hidden;background:#070b18}
+  canvas{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none}
+
+  /* HUD 浮在画布上，不占布局高度，画面零留白 */
+  #hud{position:absolute;left:0;right:0;top:0;z-index:3;pointer-events:none;
+    padding:calc(env(safe-area-inset-top,0px) + 8px) calc(env(safe-area-inset-right,0px) + 10px) 0 calc(env(safe-area-inset-left,0px) + 10px);
+    display:flex;flex-direction:column;gap:5px;color:#e8f0ff;font:500 12px/1.2 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .stats{display:flex;align-items:baseline;gap:10px;text-shadow:0 1px 6px rgba(0,0,0,.6)}
+  .stats .label{font-size:10px;color:#8fa6cf;letter-spacing:.5px;white-space:nowrap}
+  .stats b{font-size:19px;font-weight:700;letter-spacing:1px;font-variant-numeric:tabular-nums}
+  .stats .best{font-size:11px;color:#9fb4dc;font-variant-numeric:tabular-nums}
+  .sub{display:flex;gap:12px;align-items:center;font-size:11px;color:#b8c9ea}
+  .sub .hearts{color:#ff6b8b;letter-spacing:2px;font-size:13px}
+  .sub .lvl{color:#8ee6ff}
+  .sub .mult{color:#ffd27f;font-size:10.5px;font-weight:700;font-variant-numeric:tabular-nums;
+    padding:2px 6px;border-radius:8px;background:rgba(255,190,100,.12);border:1px solid rgba(255,200,120,.22)}
+  .sub .mult.hot{color:#ffad82;background:rgba(255,110,70,.14);border-color:rgba(255,160,110,.42);
+    box-shadow:0 0 8px rgba(255,125,85,.22)}
+  .sub .mult.max{color:#fff0a8;background:rgba(255,60,40,.28);border-color:rgba(255,160,80,.85)}
+  .sub .mult.slow{color:#9ff8e4;background:rgba(60,220,190,.18);border-color:rgba(120,245,215,.7);
+    box-shadow:0 0 10px rgba(90,235,200,.4);animation:slowPulse 1s ease-in-out infinite}
+  @keyframes slowPulse{0%,100%{box-shadow:0 0 6px rgba(90,235,200,.25)}50%{box-shadow:0 0 14px rgba(120,245,215,.65)}}
+  .tools{display:flex;gap:6px;pointer-events:auto}
+  .tools button{position:relative;width:34px;height:34px;border:1px solid rgba(150,190,255,.22);border-radius:11px;
+    background:rgba(20,32,62,.62);color:#dbe9ff;font-size:15px;line-height:1;display:grid;place-items:center;
+    backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);cursor:pointer;padding:0}
+  .tools button:active{transform:scale(.92);background:rgba(60,95,170,.7)}
+  .tools button.wide{width:auto;padding:0 9px;font-size:11px;font-weight:600}
+  .tools button.auto{padding:0 6px;font-size:10px;font-weight:800;letter-spacing:.2px}
+  .tools button.auto.on{color:#041a24;border-color:rgba(150,255,220,.85);
+    background:linear-gradient(135deg,#7ff0c0,#5bc8ff);box-shadow:0 0 13px rgba(100,235,190,.5)}
+  .tools button.auto.on::after{content:'';position:absolute;right:3px;top:3px;width:5px;height:5px;
+    border-radius:50%;background:#041a24;opacity:.65}
+  @media (max-width:340px){
+    .stats{gap:6px}
+    .stats b{font-size:16px}
+    .stats .best{font-size:10px;white-space:nowrap}
+    .tools{gap:4px}
+    .tools button{width:29px;height:30px;font-size:13px}
+    .tools button.wide{padding:0 5px;font-size:10px;white-space:nowrap}
+    .tools button.auto{padding:0 5px}
+    .sub{gap:8px}
+    .hud-right{gap:4px}
+    .shapes{gap:1px}
+    .shape{width:22px;height:22px}
+    .sub .mult{font-size:9.5px;padding:1px 4px}
+  }
+
+  /* 第二行：状态区在左，形状图标紧贴提示栏左边 */
+  .hud2 .hud-left{flex:0 0 auto;gap:9px}
+  .hud-right{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0}
+  .hud-right #uiTip{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
+  .shapes{display:flex;gap:2px;flex:0 0 auto;padding:2px;border-radius:10px;pointer-events:auto;
+    background:rgba(16,28,56,.55);border:1px solid rgba(150,190,255,.16);
+    transition:opacity .2s}
+  .shape{position:relative;width:24px;height:24px;padding:2px;border:1px solid transparent;border-radius:7px;
+    background:transparent;cursor:pointer;display:grid;place-items:center;padding:0}
+  .shape svg{width:19px;height:17px;fill:#8099c4;transition:fill .15s}
+  .shape.on{background:rgba(110,180,255,.22);border-color:rgba(140,215,255,.65);
+    box-shadow:0 0 8px rgba(110,190,255,.28)}
+  .shape.on svg{fill:#cdebff}
+  .shape:active{transform:scale(.88)}
+  .shapes.locked{opacity:.48}
+  .shapes.locked .shape{cursor:not-allowed}
+  .shapes.locked .shape.on::after{content:'';position:absolute;right:1px;top:1px;width:4px;height:4px;
+    border-radius:50%;background:#ffd27f;box-shadow:0 0 5px #ffd27f}
+
+  /* 竖屏专用：横屏时覆盖整个游戏，避免横向视口挤压棋盘。 */
+  #landscape{position:absolute;inset:0;z-index:10;display:none;place-items:center;
+    padding:24px;background:rgba(5,9,24,.97);color:#dceaff;text-align:center;
+    pointer-events:auto}
+  #landscape .rotate-card{display:flex;flex-direction:column;align-items:center;gap:14px;
+    max-width:260px;font:600 15px/1.5 system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif}
+  #landscape .rotate-icon{font-size:42px;line-height:1;filter:drop-shadow(0 0 12px rgba(100,190,255,.5))}
+  #landscape small{font-size:12px;font-weight:400;color:#91a8d1}
+  @media (orientation:landscape){#landscape{display:grid}}
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="row">
+      <div class="stats"><span class="label">分数</span><b id="uiScore">0</b><span class="best">最高 <i id="uiBest">0</i></span></div>
+      <div class="tools">
+        <button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button>
+        <button id="btnFull" class="wide" title="全屏" aria-label="切换全屏">全屏</button>
+        <button id="btnPause" title="暂停" aria-label="暂停">⏸</button>
+        <button id="btnReset" title="重开" aria-label="重新开始">↻</button>
+      </div>
+    </div>
+    <div class="row hud2">
+      <div class="sub hud-left"><span class="hearts" id="uiLives">♥♥♥</span><span class="lvl" id="uiLevel">第 1 关</span><span class="mult" id="uiSpeed">×1.00</span></div>
+      <div class="hud-right">
+        <div class="shapes" id="shapeMenu" role="group" aria-label="挡板形状">
+          <button class="shape on" data-shape="rect" title="圆角矩形挡板" aria-label="圆角矩形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><rect x="3" y="20" width="34" height="11" rx="5.5"/></svg></button>
+          <button class="shape" data-shape="moon" title="新月形挡板（凹面朝上）" aria-label="新月形挡板（凹面朝上）"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 7 Q20 39 38 7 Q20 18 2 7Z"/></svg></button>
+          <button class="shape" data-shape="semicircle" title="半圆形挡板" aria-label="半圆形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 31A18 18 0 0 1 38 31Z"/></svg></button>
+          <button class="shape" data-shape="triangle" title="等边三角形挡板" aria-label="等边三角形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3.3 36 31 4 31Z"/></svg></button>
+        </div>
+        <div class="sub" id="uiTip">点球或碰挡板发球</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="landscape" role="status" aria-live="polite">
+    <div class="rotate-card"><span class="rotate-icon">↻</span><strong>请将设备转回竖屏</strong>
+      <small>本游戏为竖屏设计，横屏时会暂停画面，转回竖屏即可继续。</small></div>
+  </div>
+</div>
+
+<script>
+<!-- 使用立即执行函数封装游戏代码，避免变量污染页面全局作用域。 -->
+(function(){
+  'use strict';
+  const app = document.getElementById('app');
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const $ = id => document.getElementById(id);
+
+  let W = 0, H = 0, dpr = 1, hudBottom = 0, topInset = 0;
+  let state = 'serving';          // serving（待发球）| playing | paused
+  let pausedFrom = 'playing';
+  let score = 0, best = 0, lives = 3, level = 1;   // lives 允许 .5（陷阱关半颗心）
+  function fmtLives(){
+    if(lives <= 0) return '—';
+    const full = Math.floor(lives + 1e-6);
+    return '♥'.repeat(full) + (lives - full >= .5 ? '♡' : '');
+  }
+  function addLives(v){ lives = clamp(lives + v, 0, 5); syncUI(); }
+  // 难度梯度：一颗心的分数成本随关卡线性上升。第 1 关 300 分，
+  // 第 10 关 1380 分，第 50 关 6180 分；球速恒定，分数越高越难回血。
+  const HEART_BASE = 300, HEART_GROW = 120, HEART_PER_LEVEL = 2;
+  const heartStep = lv => HEART_BASE + (lv - 1) * HEART_GROW;
+  let nextHeartAt = HEART_BASE;    // 下一个补心分数阈值（换关按本关成本重设）
+  let heartGain = 0;               // 本关已补的心（换关重置，防止一路满血）
+  let actx = null;
+  let last = 0, time = 0, toast = null;
+  let bricks = [], rows = 8, cols = 8, area = 0, gap = 3.5, padX = 12, rowCount = 8;
+  let paddle = {x:0,y:0,w:90,h:14,targetX:0,vx:0};
+  let ball = {x:0,y:0,vx:0,vy:0,r:7};
+  let trail = [], particles = [], stars = [];
+  let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
+  let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
+  // 每 10 关一个周期；周期内 10 关各是一种类型，轮流登场
+  const LT = {CLASSIC:1, CARNIVAL:2, FORTRESS:3, CHAIN:4, GALAGA:5,
+              SNAKE:6, TRAP:7, CURSE:8, SWARM:9, DROP:10};
+  const levelType = () => ((level - 1) % 10) + 1;
+  const LT_NAME = ['', '经典阵型', '金砖嘉年华', '硬砖堡垒', '连锁风暴', '编队俯冲',
+                   '贪吃蛇', '陷阱', '弹珠台', '多球狂欢', '落砖'];
+  const LT_HINT = ['',
+    '经典阵型 · 控制落点，清空砖阵', '✦ 金砖嘉年华 · 奖励砖带来额外收益',
+    '▦ 硬砖堡垒 · 上墙双固定缺口，下墙通道移动',
+    '◎ 连锁风暴 · 利用爆炸砖触发连锁破坏', '👾 编队俯冲 · 击落俯冲敌机',
+    '🐍 贪吃蛇 · 从尾部逐节击破，清空蛇身通关',
+    '☠ 陷阱关 · 清除非负面砖即可通关，负面砖可留下',
+    '🎰 弹珠台 · 击碎目标砖，避开弹力柱与球袋',
+    '✕ 多球狂欢 · 利用多球同时清理砖阵',
+    '⚠ 落砖关 · 砖块会下落，注意躲避'];
+  const isDropLevel  = () => levelType() === LT.DROP;    // 第 10/20/30… 关
+  const isDiveLevel  = () => levelType() === LT.GALAGA;  // 第 5/15/25… 关
+  const isSnakeLevel = () => levelType() === LT.SNAKE;
+  const isTrapLevel  = () => levelType() === LT.TRAP;
+  const isCurseLevel = () => levelType() === LT.CURSE;
+  const isFortressLevel = () => levelType() === LT.FORTRESS;
+  let fortressGateX = 0, fortressGateDir = 1;
+  let fortressUpperY = 0, fortressLowerY = 0;
+  const fortressGateSpeed = () => Math.max(95, W * .34);
+  function fortressWallYs(){
+    return {
+      upper: fortressUpperY || topInset + 12,
+      lower: fortressLowerY || topInset + area + 70
+    };
+  }
+  function prepareFortressLayout(){
+    if(!isFortressLevel()) return;
+    const layout = bricks.filter(b => b && b.alive && b.layoutVisible !== false);
+    if(!layout.length) return;
+    // 整组方块下移，给上方固定铁墙留出肉眼可见的空隙。
+    const top = Math.min(...layout.map(b => b.y));
+    const shift = Math.max(0, topInset + 54 - top);
+    if(shift) for(const b of layout) b.y += shift;
+    const shiftedBottom = Math.max(...layout.map(b => b.y + b.h));
+    // 两道墙的位置只在建关/改变屏幕尺寸时计算，不随方块消除而变化。
+    fortressUpperY = topInset + 12;
+    fortressLowerY = Math.min(paddle.y - 70, shiftedBottom + 24);
+  }
+  function fortressPasses(x, wallY, radius, gateX=fortressGateX){
+    const r = radius;
+    if(Math.abs(wallY - fortressWallYs().upper) < .1){
+      const gaps = [W*.33, W*.67];
+      return gaps.some(g => Math.abs(x-g) < W*.055-r);
+    }
+    return Math.abs(x-gateX) < W*.14-r;
+  }
+  function collideFortressWalls(entity, px, py){
+    if(!isFortressLevel()) return false;
+    const walls = fortressWallYs(), r = entity.r;
+    for(const y of [walls.upper, walls.lower]){
+      const crossed = (py + r <= y && entity.y + r >= y) || (py - r >= y && entity.y - r <= y);
+      if(!crossed) continue;
+      if(fortressPasses(entity.x, y, r)) continue;
+      if(py < y){ entity.y = y-r-.5; entity.vy = -Math.abs(entity.vy); }
+      else { entity.y = y+r+.5; entity.vy = Math.abs(entity.vy); }
+      spawnParticles(entity.x, y, '#79dfff', 5);
+      beep(330,.035,'sine',.025);
+      return true;
+    }
+    return false;
+  }
+  // 第 8 关弹珠台：上方目标砖、中段弹力柱、下段球袋。
+  let plinkoBumpers = [], plinkoPockets = [];
+  function buildPlinko(){
+    // 改为左右两侧的交错导流柱，不再围成封闭星形；中央留出宽阔通道直达球袋。
+    const top = topInset + area + 18, bottom = Math.max(top + 70, paddle.y - 138);
+    const span = bottom - top;
+    const cx = W * .5, cy = top + span * .48;
+    const offsets = [
+      [-.25, -.22], [-.16, -.07], [-.25, .09], [-.16, .24],
+      [ .25, -.22], [ .16, -.07], [ .25, .09], [ .16, .24]
+    ];
+    plinkoBumpers = offsets.map(([x,y]) => ({
+      x:cx + x * W,
+      y:cy + y * span,
+      r:Math.min(10,W*.026)
+    }));
+    // 球袋仍在机关区正中央；两列弹力柱之间保持开放，不再封堵进袋路线。
+    plinkoPockets = [{x:cx, y:cy, r:Math.min(8,W*.021)}];
+  }
+  let divers = [], diveTimer = 0, formationSway = 0;
+  let nextEntityId = 1;
+  const entityRegistry = new Map(); // 所有活动微引擎实体的统一登记表。
+  // 微引擎实体基类：稳定身份 + 统一生命周期；具体碰撞形状由实体类型提供。
+  const COLLISION_LAYER = Object.freeze({
+    NONE:0, BRICK:1, ENEMY:2, HAZARD:4, PROJECTILE:8, PADDLE:16
+  });
+  // mask 表示「允许哪些来源层命中我」；查询时按来源层筛选目标。
+  const ENTITY_COLLISION = Object.freeze({
+    brick:{layer:COLLISION_LAYER.BRICK, mask:COLLISION_LAYER.PROJECTILE},
+    'galaga-diver':{layer:COLLISION_LAYER.ENEMY, mask:COLLISION_LAYER.PROJECTILE},
+    'falling-brick':{layer:COLLISION_LAYER.HAZARD, mask:COLLISION_LAYER.PADDLE},
+    'snake-rocket':{layer:COLLISION_LAYER.HAZARD, mask:COLLISION_LAYER.PADDLE},
+    'extra-ball':{layer:COLLISION_LAYER.PROJECTILE, mask:0}
+  });
+  class GameEntity {
+    constructor(entityKind, data){
+      Object.assign(this, data);
+      this.id = nextEntityId++;
+      this.entityKind = entityKind;
+      const collision = ENTITY_COLLISION[entityKind] || {layer:COLLISION_LAYER.NONE, mask:0};
+      this.collisionLayer = data.collisionLayer ?? collision.layer;
+      this.collisionMask = data.collisionMask ?? collision.mask;
+      this.alive = data.alive !== false;
+      if(this.alive) entityRegistry.set(this.id, this);
+    }
+    retire(){
+      if(!this.alive) return false;
+      this.alive = false;
+      entityRegistry.delete(this.id);
+      return true;
+    }
+  }
+  let respawnBudget = 0, respawnQueue = [];   // 小蜜蜂：被击落的位置自动补位（有限次数）
+  let galagaKills = 0;
+  let snake = null, snakeFoods = [], snakeRockets = []; // 贪吃蛇关：多食物与蛇头火箭
+  let bleed = null, curse = null, dmgScale = 1;  // 陷阱倒计时 / 诅咒状态 / 伤害倍率
+  let extraBalls = [];                       // 多球砖分裂出的额外球
+  let slowT = 0;                             // 减速剩余秒数
+  let aimPlan = null, aimTick = 0, lastLandX = 0;
+  let autoFocusBall = null, autoMode = 'normal', autoIntent = 'normal';  // 六状态战术模式与当前攻击意图
+  let hitFx = null;           // 接球瞬间的方向指示
+  let pointerDown = false, pointerId = null;
+  // 挡板形状：一局内锁定，只有新开局（含重开）才能重新选
+  const SHAPES = ['rect', 'moon', 'semicircle', 'triangle'];
+  let shape = 'rect', shapeLocked = false;
+  // 自动驾驶：自动发球 + 预测落点接球，全程不用碰屏幕
+  let autoPilot = false, autoServeT = 0.5;
+
+  try { best = parseInt(localStorage.getItem('brick_best') || '0', 10) || 0; } catch(e){}
+  try {
+    const saved = localStorage.getItem('brick_shape');
+    if(SHAPES.indexOf(saved) >= 0) shape = saved;
+  } catch(e){}
+
+  /* ---------- 尺寸：铺满可用视口，全屏/地址栏变化都实时重排 ---------- */
+  // 根据手机可用视口重新计算画布尺寸，并同步处理设备像素比。
+  function resize(){
+    const r = app.getBoundingClientRect();
+    const nw = Math.max(1, Math.round(r.width)), nh = Math.max(1, Math.round(r.height));
+    const oldW = W, oldH = H, oldSpeed = speed();
+    W = nw; H = nh;
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(W * dpr);
+    canvas.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+    const hr = $('hud').getBoundingClientRect();
+    hudBottom = hr.bottom - r.top;
+    topInset = hudBottom + 8;
+
+    padX = Math.max(10, W * 0.028);
+    gap = Math.max(2.5, Math.min(4.5, W * 0.009));
+    area = brickArea();
+    // 特殊关卡的砖区比例属于关卡布局；视口变化时按同一规则重新计算，不能退回普通关卡高度。
+    if(isSnakeLevel()) area = Math.min(H * .54, availableBoardHeight());
+    else if(isDiveLevel() && rows > 1){
+      area = galagaBoardArea();
+    } else if(isCurseLevel()){
+      area = Math.min(H * .22, availableBoardHeight() * .42);
+    }
+    // 当前关卡的逻辑列数属于关卡拓扑；旋转/全屏只改变单元像素尺寸，不改实体列坐标。
+    // 仅在首次建局（还没有砖块）时，根据屏幕宽度初始化列数。
+    if(!bricks.length)
+      cols = isSnakeLevel() ? clamp(Math.round(W / 30), 9, 18) : clamp(Math.round(W / 50), 6, 10);
+    // rows 同样只由关卡决定，避免屏幕变化后实体索引与实际行数脱节。
+
+    paddle.w = clamp(W * 0.23, 74, 132);
+    paddle.h = clamp(H * 0.017, 11, 18);
+    paddle.y = H - clamp(H * 0.055, 34, 58) - paddle.h;
+    ball.r = clamp(W * 0.018, 6, 9);
+
+    layoutBricks();
+    prepareFortressLayout();
+    if(isCurseLevel()) buildPlinko();
+    makeStars();
+
+    if(oldW && oldH){
+      const sx = W / oldW, sy = H / oldH;
+      const scale = Math.min(sx, sy);
+      const rx = ball.x / oldW, ry = ball.y / oldH;
+      ball.x = clamp(rx * W, ball.r, W - ball.r);
+      ball.y = clamp(ry * H, ball.r, H - ball.r);
+      paddle.x = clamp(paddle.x * sx, 2, W - paddle.w - 2);
+      // 堡垒移动闸门也是视口内的动态几何；宽度变化时同步迁移，避免闸门留在旧屏幕坐标。
+      if(isFortressLevel()){
+        fortressGateX = clamp(fortressGateX * sx, W*.14 + 4, W - W*.14 - 4);
+      }
+      // 屏幕尺寸变了（标称基底跟 H 走）：只按比例换挡，保留物理演化出的速率与方向
+      const sp = speed(), os = oldSpeed || sp, k = os > 0 ? sp / os : 1;
+      ball.vx *= k; ball.vy *= k;
+      // 所有活动球都必须一起迁移；只缩放速度会让多球在旋转/全屏后留在旧坐标。
+      for(const e of extraBalls){
+        // 先缩放半径、再按新半径夹紧坐标；反过来会让放大后的球越出窄屏边缘。
+        e.r *= scale;
+        e.r = Math.min(e.r, Math.max(1, Math.min((W - 4) / 2, (H - 4) / 2)));
+        e.x = clamp(e.x * sx, e.r, W - e.r);
+        e.y = clamp(e.y * sy, e.r, H - e.r);
+        e.vx *= k; e.vy *= k;
+        e.trail.length = 0;
+      }
+      // 落砖是独立物理实体，不随砖阵重排；按新旧视口比例迁移位置、尺寸和速度。
+      for(const f of falling){
+        f.x *= sx; f.y *= sy; f.py *= sy;
+        f.w *= sx; f.h *= sy;
+        f.vx *= sx; f.vy *= sy;
+      }
+      // 俯冲敌机引用原砖块：预警阶段重新贴合重排后的砖，俯冲阶段连续缩放轨迹。
+      for(const d of divers){
+        const b = d.b && d.phase === 'warn' ? d.b : null;
+        if(b){
+          d.x = b.x + formationSway + b.w / 2;
+          d.y = b.y + b.h / 2; d.py = d.y;
+          d.w = b.w; d.h = b.h;
+        } else {
+          d.x *= sx; d.y *= sy; d.py *= sy;
+          d.w *= sx; d.h *= sy;
+          d.vx *= sx; d.vy *= sy; d.targetX *= sx;
+        }
+        d.trail.length = 0;
+      }
+      // 蛇头火箭按新视口迁移，避免画面变高/变宽后从旧坐标穿过挡板。
+      for(const rocket of snakeRockets){
+        rocket.x *= sx; rocket.y *= sy;
+        rocket.vy *= sy; rocket.r *= scale;
+        rocket.trail.length = 0;
+      }
+      trail.length = 0;
+    } else {
+      paddle.x = (W - paddle.w) / 2;
+    }
+    paddle.targetX = paddle.x;
+    if(state === 'serving') snapBall();
+    syncUI();
+  }
+  const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+  // 球速不再是难度旋钮：它只是「发射 / 生成新球」的基准，由屏幕尺寸决定，全程恒定。
+  // 球一旦飞起来，速率完全由碰撞（法线反射 + 挡板做功 + 摩擦耗散）自行演化，
+  // 代码不再写回标称值。HUD 的 ×N.NN 是「实测速率 / 基准」，是观测值，不是设定值。
+  const SLOW_SECONDS = 2, MAX_BALLS = 5;
+  const SLOW_FACTOR = .55;               // 减速砖：全场速度一次性乘这个系数
+  const FURY_REF = 3;                    // 火焰拖尾/配色的视觉插值参考（实测倍率）
+  const baseSpeed = () => clamp(H * 0.55, 270, 580);
+  const speed = () => baseSpeed();
+  function liveMult(){
+    const v = Math.hypot(ball.vx, ball.vy);
+    return v > 1 ? clamp(v / Math.max(1, baseSpeed()), .05, 12) : 1;
+  }
+  // 所有关卡共用 HUD 与挡板之间的安全绘制高度，极短画布也不能把棋盘挤出边界。
+  function availableBoardHeight(){
+    const paddleTop = H - clamp(H * .055, 34, 58) - clamp(H * .017, 11, 18);
+    return Math.max(0, paddleTop - topInset - 12);
+  }
+  // 超长竖屏（如 20:9）把砖块区拉得更高；但绝不越过实际可用高度。
+  function brickArea(){
+    const ideal = H * (H / Math.max(1, W) > 2.05 ? 0.47 : 0.42);
+    return Math.min(ideal, availableBoardHeight());
+  }
+  // 编队关先按宽度计算等边阵型的理想高度，再限制在 HUD 与挡板之间。
+  // 横屏时宽度可能远大于高度；不做这一步，整队会被画布底边裁切。
+  function galagaBoardArea(){
+    const availHalf = (W - padX * 2) / 2 * .9;
+    const ideal = Math.sqrt(3) * availHalf / Math.max(1, rows - 1) * rows;
+    return Math.min(ideal, availableBoardHeight());
+  }
+
+  /* ---------- 挡板形状几何（标准形状，不压扁） ---------- */
+  // 底边 = 挡板宽 pw。等边三角形高 = √3/2·pw，半圆半径 = pw/2
+  const TRI_H = () => paddle.w * Math.sqrt(3) / 2;
+  const SEMI_R = () => paddle.w / 2;
+  const MOON_H = () => paddle.w * .34;
+  function shapeBodyH(){
+    if(shape === 'triangle') return TRI_H();
+    if(shape === 'semicircle') return SEMI_R();
+    if(shape === 'moon') return MOON_H();
+    return paddle.h;
+  }
+  // t ∈ [0,1] 为挡板上横向相对位置，返回该处「顶面」的绝对 y
+  function surfaceY(t){
+    const bottom = paddle.y + paddle.h;
+    if(shape === 'rect') return paddle.y;
+    if(shape === 'triangle') return bottom - TRI_H() * (1 - Math.abs(2 * t - 1));
+    if(shape === 'moon'){
+      // 新月内侧是朝上的 U 形凹面：两端高、中央低，球沿凹面法线反弹。
+      const h = MOON_H();
+      return bottom - h + 2.88 * h * t * (1 - t);
+    }
+    const u = clamp(2 * t - 1, -1, 1);
+    return bottom - SEMI_R() * Math.sqrt(Math.max(0, 1 - u * u));
+  }
+
+  /* ---------- 挡板物理：法线反射 + 挡板参考系 + 切向摩擦 ---------- */
+  // 基准速率只用于发射/生成球；飞行速率由碰撞自行演化，代码不写回 speed()。
+  // 挡板横速上限是手指/电机的物理上限，挡板响应是固定的机械增益 —— 都不随关卡变。
+  const PADDLE_MAX_V = 900, PADDLE_GAIN = 26;
+  // Shared by planning and runtime movement so predicted paddle velocity matches the actuator limit.
+  function paddleCommandVelocity(targetX, currentX){
+    return clamp((targetX - currentX) * PADDLE_GAIN, -PADDLE_MAX_V, PADDLE_MAX_V);
+  }
+  const FRICTION = .38;          // 切向摩擦系数：真实球拍会把横向相对速度耗散一部分
+  const FRICTION_CAP = .85;      // 库仑限幅：切向冲量不超过法向冲量的这个比例
+
+  // 接触点处的外法线（屏幕 y 向下，故朝上的法线 y 为负）
+  function paddleNormal(rel){
+    if(shape === 'rect') return {x:0, y:-1};
+    if(shape === 'triangle'){
+      // 标准等边三角形：两斜面与水平成 60°，法线恒定
+      const s = rel >= 0 ? 1 : -1;
+      return {x:s * Math.sqrt(3) / 2, y:-.5};
+    }
+    if(shape === 'moon'){
+      // U 形凹面法线：中心竖直向上，两侧随曲面向外倾斜。
+      const h = MOON_H(), slope = -1.44 * h * rel / paddle.w;
+      const inv = 1 / Math.hypot(slope, 1);
+      return {x:-slope * inv, y:-inv};
+    }
+    // 半圆：法线沿半径方向；0.9 截断对应真实球体不可能贴合到无穷边缘
+    const u = clamp(rel, -.9, .9);
+    return {x:u, y:-Math.sqrt(Math.max(.01, 1 - u * u))};
+  }
+
+  // 完全由物理决定出射速度：v' = (v - U) - 2[(v-U)·n]n （挡板系镜面反射）再变换回世界系
+  // 外加切向摩擦冲量。U 是挡板接触瞬间的横向速度，手动 / Auto / 辅球走同一套，无特权。
+  function paddleReflect(vx, vy, rel, Ux, normalOverride){
+    let n = normalOverride || paddleNormal(rel);
+    Ux = clamp(Ux || 0, -PADDLE_MAX_V, PADDLE_MAX_V);
+    const ux = vx - Ux, uy = vy;                  // 转到挡板参考系
+    const vlen = Math.max(1, Math.hypot(ux, uy));
+    if(!normalOverride && ux * n.x + uy * n.y > 0) n = {x:0, y:-1}; // 普通挡板的擦边兜底；月牙必须保留实际弧面法线
+
+    // 挡板系镜面反射 + 库仑摩擦，再变换回世界系
+    const reflect = nn => {
+      const dd = ux * nn.x + uy * nn.y;
+      const jn = Math.abs(2 * dd);
+      const tx = -nn.y, ty = nn.x;                // 单位切向
+      const ut = ux * tx + uy * ty;
+      const fr = (curse && curse.drunkT > 0) ? curse.friction : FRICTION;
+      const jt = clamp(fr * ut, -FRICTION_CAP * jn, FRICTION_CAP * jn);
+      return {x:-dd * nn.x + (ut - jt) * tx + Ux,
+              y:-dd * nn.y + (ut - jt) * ty};
+    };
+    // 不篡改几何法线：三角斜面与半圆侧部允许把球真实地反射向侧方甚至下方。
+    let out = reflect(n);
+    let ox = out.x, oy = out.y;
+    // 数值边界：只防数值爆炸 / 停滞，用绝对上限，绝不按标称倍率把物理速率归一
+    // （倍率只是发射基底，挡板做功后的真实速率由碰撞自行决定）
+    const m = Math.hypot(ox, oy);
+    if(m > 12000){ const k = 12000 / m; ox *= k; oy *= k; }
+    else if(m > 0 && m < 1){ const k = 1 / m; ox *= k; oy *= k; }
+    return {vx:ox, vy:oy};
+  }
+
+  // 月牙是有厚度的弯月实体：内弧法线朝上，外弧法线朝下。
+  // 对两条二次贝塞尔边界分别求最近点，按真实接触侧选择外法线。
+  function moonContact(o, prevX, prevY, isMain, paddleStartX, paddleEndX){
+    const pw = paddle.w, top = paddle.y + paddle.h - MOON_H();
+    const h = MOON_H(), bottom = paddle.y + paddle.h;
+    // 以挡板局部坐标定义曲线；每个扫掠采样点再按挡板当帧位移还原世界坐标。
+    const curves = [
+      {kind:'inner', p0:{x:0,y:top}, p1:{x:pw/2,y:bottom+.44*h}, p2:{x:pw,y:top}},
+      {kind:'outer', p0:{x:0,y:top}, p1:{x:pw/2,y:bottom+h}, p2:{x:pw,y:top}}
+    ];
+    const pointAt = (c,t) => {
+      const u=1-t;
+      return {
+        x:u*u*c.p0.x+2*u*t*c.p1.x+t*t*c.p2.x,
+        y:u*u*c.p0.y+2*u*t*c.p1.y+t*t*c.p2.y
+      };
+    };
+    const closestOnCurve = (c,cx,cy) => {
+      // 先粗采样定位，再在局部区间细化；端点也始终纳入搜索。
+      let bi=0, bd=Infinity;
+      for(let j=0;j<=16;j++){
+        const t=j/16, q=pointAt(c,t), d=(cx-q.x)**2+(cy-q.y)**2;
+        if(d<bd){bd=d;bi=j;}
+      }
+      let lo=Math.max(0,(bi-1)/16), hi=Math.min(1,(bi+1)/16);
+      for(let j=0;j<12;j++){
+        const t1=lo+(hi-lo)/3, t2=hi-(hi-lo)/3;
+        const a=pointAt(c,t1), b=pointAt(c,t2);
+        if((cx-a.x)**2+(cy-a.y)**2 < (cx-b.x)**2+(cy-b.y)**2) hi=t2;
+        else lo=t1;
+      }
+      const t=(lo+hi)/2, q=pointAt(c,t);
+      const dx=2*((1-t)*(c.p1.x-c.p0.x)+t*(c.p2.x-c.p1.x));
+      const dy=2*((1-t)*(c.p1.y-c.p0.y)+t*(c.p2.y-c.p1.y));
+      const L=Math.hypot(dx,dy)||1;
+      // 两条边界各自朝向月牙实体外部的法线：内弧朝上，外弧朝下。
+      const n=c.kind==='inner'?{x:dy/L,y:-dx/L}:{x:-dy/L,y:dx/L};
+      const ox=cx-q.x, oy=cy-q.y;
+      const signed=ox*n.x+oy*n.y;
+      return {q,n,dist:Math.hypot(ox,oy),signed,kind:c.kind};
+    };
+
+    const travel=Math.hypot((o.x-prevX)-(paddleEndX-paddleStartX),o.y-prevY);
+    // 自适应扫掠采样：采样间距不超过球半径的 0.4，避免高速球跨过整条弧面。
+    const steps=clamp(Math.ceil(travel/Math.max(1,o.r*.4)),1,256);
+    let contact=null;
+    for(let k=0;k<=steps;k++){
+      const f=k/steps;
+      // 挡板在本子步内从上一位置匀速移动到当前 x；转到挡板参考系后，
+      // 即使球静止、挡板横扫过球，也能检测到真实的扫掠接触。
+      const paddleAt=paddleStartX+(paddleEndX-paddleStartX)*f;
+      const cx=prevX+(o.x-prevX)*f-paddleAt, cy=prevY+(o.y-prevY)*f;
+      let atThisStep=null;
+      for(const c of curves){
+        const hit=closestOnCurve(c,cx,cy);
+        // 只允许球从该弧面的自由空间一侧接近；禁止从月牙实体内部误触发另一条弧。
+        const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y < -0.01;
+        if(hit.signed>=-0.35 && hit.dist<=o.r+0.35 && approaching &&
+           (!atThisStep || hit.dist<atThisStep.dist)) atThisStep={...hit,f};
+      }
+      if(atThisStep){contact=atThisStep;break;} // 取沿轨迹最早接触点，而非穿透最深点
+    }
+    if(!contact) return false;
+
+    // 沿实际接触法线分离球心，再用同一法线做挡板参考系反射。
+    const paddleAtContact=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
+    o.x=paddleAtContact+contact.q.x+contact.n.x*(o.r+.6);
+    o.y=contact.q.y+contact.n.y*(o.r+.6);
+    const relAtContact=clamp((contact.q.x-pw/2)/(pw/2),-1,1);
+    bouncePaddle(o,contact.q.y,isMain,contact.n,relAtContact);
+    return true;
+  }
+
+  // 三角形、半圆与矩形的真实上边界扫掠接触。法线始终取实体外侧，
+  // 因而陡斜面/圆弧侧部不会被强行改成向上的反弹。
+  function shapedPaddleContact(o, prevX, prevY, isMain, paddleStartX, paddleEndX){
+    const pw=paddle.w, bottom=paddle.y+paddle.h, half= pw/2;
+    const pointAt=t=>{
+      if(shape==='triangle'){
+        const x=pw*t, y=bottom-TRI_H()*(1-Math.abs(2*t-1));
+        const slope=t<.5?-2*TRI_H()/pw:2*TRI_H()/pw;
+        const L=Math.hypot(slope,1);
+        return {q:{x,y},n:{x:slope/L,y:-1/L}};
+      }
+      if(shape==='semicircle'){
+        const u=clamp(2*t-1,-1,1), y=bottom-SEMI_R()*Math.sqrt(Math.max(0,1-u*u));
+        return {q:{x:pw*t,y},n:{x:u,y:-Math.sqrt(Math.max(0,1-u*u))}};
+      }
+      return {q:{x:pw*t,y:paddle.y},n:{x:0,y:-1}};
+    };
+    const closest=(x,y)=>{
+      let best=null,bd=Infinity,bi=0;
+      for(let j=0;j<=32;j++){const t=j/32,p=pointAt(t),d=(x-p.q.x)**2+(y-p.q.y)**2;if(d<bd){bd=d;bi=j;best=p;}}
+      let lo=Math.max(0,(bi-1)/32),hi=Math.min(1,(bi+1)/32);
+      for(let j=0;j<14;j++){
+        const t1=lo+(hi-lo)/3,t2=hi-(hi-lo)/3,p1=pointAt(t1),p2=pointAt(t2);
+        const d1=(x-p1.q.x)**2+(y-p1.q.y)**2,d2=(x-p2.q.x)**2+(y-p2.q.y)**2;
+        if(d1<d2)hi=t2;else lo=t1;
+      }
+      const t=(lo+hi)/2,p=pointAt(t),dx=x-p.q.x,dy=y-p.q.y;
+      return {...p,dist:Math.hypot(dx,dy),signed:dx*p.n.x+dy*p.n.y,t};
+    };
+    const travel=Math.hypot((o.x-prevX)-(paddleEndX-paddleStartX),o.y-prevY);
+    const steps=clamp(Math.ceil(travel/Math.max(1,o.r*.4)),1,256);
+    let contact=null;
+    for(let k=0;k<=steps;k++){
+      const f=k/steps,px=paddleStartX+(paddleEndX-paddleStartX)*f;
+      const hit=closest(prevX+(o.x-prevX)*f-px,prevY+(o.y-prevY)*f);
+      const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y<-.01;
+      if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching){contact={...hit,f};break;}
+    }
+    if(!contact)return false;
+    const px=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
+    o.x=px+contact.q.x+contact.n.x*(o.r+.6);
+    o.y=contact.q.y+contact.n.y*(o.r+.6);
+    bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-half)/half,-1,1));
+    return true;
+  }
+
+  // 统一的接球：手动、Auto、主球、辅球共用同一个物理函数
+  function bouncePaddle(o, sy, isMain, normalOverride, relOverride){
+    const rel = relOverride == null
+      ? clamp((o.x - (paddle.x + paddle.w / 2)) / (paddle.w / 2), -1, 1)
+      : relOverride;
+    const out = paddleReflect(o.vx, o.vy, rel, paddle.vx, normalOverride);
+    o.vx = out.vx; o.vy = out.vy;
+    if(normalOverride){
+      // moonContact 已按真实最近点 + 对应弧面法线完成位置分离；这里不再二次推移，
+      // 否则只改 x 分量会让球心偏离该弧面的法线方向。
+    } else {
+      o.y = sy - o.r - .5;
+    }
+    const ang = Math.atan2(o.vx, -o.vy);
+    if(isMain){
+      hitFx = {x:o.x, y:sy, ang, t:.38};
+      for(let i = 0; i < 7; i++) particles.push({
+        x:o.x, y:sy,
+        vx:Math.sin(ang) * (90 + Math.random() * 130) + (Math.random() - .5) * 90,
+        vy:-Math.abs(Math.cos(ang)) * (60 + Math.random() * 110) - 30,
+        s:Math.random() * 3 + 1.5, life:Math.random() * .3 + .25,
+        color:Math.abs(ang) > .55 ? '#ffd27f' : '#8ee6ff'
+      });
+      beep(520 + Math.abs(ang) * 180, .05, 'triangle', .05);
+      // Auto：用实际出射角再预测一次，把瞄准框修正为这次真会撞到的砖
+      if(autoPilot){
+        const hit = predictFirstBrick(o.x, o.y, ang, o.r);
+        aimPlan = hit ? {cost:0, rel, brick:hit.b, err:0, need:ang, tx:hit.x} : null;
+      }
+    }
+    return ang;
+  }
+
+  /* ---------- 自动驾驶：反向传播瞄准 ---------- */
+  // 沿出射射线预测「先撞到哪块砖」：把砖块按左右墙镜像展开，折线球路就变成直线
+  function predictFirstBrick(x0, y0, ang, r){
+    const lo = 2 + r, span = Math.max(1, (W - 2 - r) - lo);
+    const dx = Math.sin(ang), dy = -Math.cos(ang);
+    if(dy >= -.05) return null;
+    let first = null, bestD = Infinity;
+    for(const b of bricks){
+      if(!b.alive || b.respawn > 0) continue;   // 归队/补位淡入中的敌机无敌，也不瞄
+      const q = brickRect(b);
+      const cx = q.x + q.w / 2, half = q.w / 2 + r;
+      // 球自下而上，先碰到砖的下边缘，在这一刻取样才贴近真实碰撞点
+      const d = (q.y + q.h + r - y0) / dy;
+      if(d <= 0 || d >= bestD) continue;
+      let hitX = null;
+      for(let k = -1; k <= 1; k++){
+        for(const mx of [cx + 2 * k * span, 2 * lo - cx + 2 * k * span]){
+          if(Math.abs(x0 + dx * d - mx) <= half){ hitX = mx; break; }
+        }
+        if(hitX !== null) break;
+      }
+      if(hitX !== null){ first = {x:hitX, b, d}; bestD = d; }
+    }
+    return first;
+  }
+
+  // 多次反弹攻击预测：从真实挡板出射速度出发，模拟侧墙与砖块的连续碰撞。
+  // 这是短时域战术近似，不修改真实游戏物理；动态砖按当前帧位置冻结，避免假装预测其未来运动。
+  function predictAttackPath(x0,y0,vx0,vy0,r,paddleX,paddleVx,maxHits=4){
+    let x=x0,y=y0,vx=vx0,vy=vy0;
+    const dt=1/180, maxSteps=180*2.4, hitSet=new Set(), hits=[];
+    const lo=2+r, hi=W-2-r;
+    let gateX=fortressGateX, gateDir=fortressGateDir;
+    for(let step=0;step<maxSteps && hits.length<maxHits;step++){
+      const px=x,py=y;
+      if(isFortressLevel()){
+        const half=W*.14, min=half+4, max=W-half-4;
+        gateX += gateDir*fortressGateSpeed()*dt;
+        if(gateX<min){gateX=min;gateDir=1;}
+        if(gateX>max){gateX=max;gateDir=-1;}
+      }
+      x+=vx*dt; y+=vy*dt;
+      // 第 3 关两道铁墙是实际碰撞边界；下墙开口会随时间移动。
+      // 预测器按同一速度/边界更新闸门，并在穿越时复用生产开口判定。
+      if(isFortressLevel()){
+        const walls=fortressWallYs();
+        for(const wallY of [walls.upper,walls.lower]){
+          const crossed=(py+r<=wallY && y+r>=wallY)||(py-r>=wallY && y-r<=wallY);
+          if(!crossed || fortressPasses(x,wallY,r,gateX)) continue;
+          if(py<wallY){y=wallY-r-.5;vy=-Math.abs(vy);}
+          else {y=wallY+r+.5;vy=Math.abs(vy);}
+        }
+      }
+      if(x<lo){x=lo+(lo-x);vx=Math.abs(vx);}
+      else if(x>hi){x=hi-(x-hi);vx=-Math.abs(vx);}
+      if(y<r+2){y=r+2+(r+2-y);vy=Math.abs(vy);}
+      if(y>paddle.y+Math.max(120,H*.22)) break;
+      // 命中砖块后球会向下返回；继续模拟一次真实挡板反射，才能评估下一轮攻击。
+      if(vy>0){
+        const rel=clamp((x-(paddleX+paddle.w/2))/(paddle.w/2),-.9,.9);
+        const paddleSurface=surfaceY((rel+1)/2);
+        if(y+r>=paddleSurface && y<paddle.y+paddle.h+12){
+          const bounced=paddleReflect(vx,vy,rel,paddleVx);
+          vx=bounced.vx;vy=bounced.vy;y=paddleSurface-r-.6;
+          continue;
+        }
+      }
+      let contact=null, bestT=Infinity;
+      for(const b of bricks){
+        if(!b.alive || b.respawn>0 || hitSet.has(b)) continue;
+        const q=brickRect(b);
+        const nx=clamp(x,q.x,q.x+q.w), ny=clamp(y,q.y,q.y+q.h);
+        const dx=x-nx,dy=y-ny;
+        if(dx*dx+dy*dy>r*r) continue;
+        const t=Math.hypot(dx,dy);
+        if(t<bestT){bestT=t;contact={b,q,nx,ny,dx,dy};}
+      }
+      if(!contact) continue;
+      const {b,q,dx,dy}=contact;
+      hitSet.add(b);
+      hits.push({b,x:clamp(x,0,W),step,time:(step+1)*dt});
+      // 依最小穿透轴决定法线；角点按速度入射方向择轴，避免连续帧重复翻转。
+      const overlapX=Math.min(Math.abs(x-(q.x-r)),Math.abs(q.x+q.w+r-x));
+      const overlapY=Math.min(Math.abs(y-(q.y-r)),Math.abs(q.y+q.h+r-y));
+      if(Math.abs(dx)>0.001 && Math.abs(dy)>0.001 && Math.abs(overlapX-overlapY)<r*.18){
+        if(Math.abs(vx)>Math.abs(vy)){vx=-vx;}else{vy=-vy;}
+      }else if(overlapX<overlapY){vx=-vx;}else{vy=-vy;}
+      // 将球心推出接触面，确保下一积分步不会重复命中同一砖。
+      const d=Math.hypot(dx,dy);
+      if(d>0.001){x=contact.nx+dx/d*(r+.35);y=contact.ny+dy/d*(r+.35);}
+      else if(overlapX<overlapY) x += vx>0?r*.35:-r*.35;
+      else y += vy>0?r*.35:-r*.35;
+    }
+    return {hits,complete:hits.length>=maxHits};
+  }
+
+  // 不是「把挡板中心对准球」，而是反过来解一个位置和速度耦合的边值问题：
+  // 枚举接球点 rel → 该站位决定接触法线 + 挡板为赶到那里自然具有的横向速度
+  // → 代入同一个 paddleReflect 得到出射角 → 预测折线路径先撞到哪块砖 → 选价值最高者
+  // Fixed-weight MLP restored from the earlier strategy model: 12 -> 8(tanh) -> 1 utility.
+  // No runtime training, optimizer, replay buffer, or model updates. Physics remains authoritative.
+  const PADDLE_BRAIN_MODEL = {"version":1,"inputSize":12,"hiddenSize":8,"inputMean":[-0.002203,-0.000511,0.000281,-0.000513,-0.00022,0.500498,0.004887,0.500848,0.541059,0.500236,-0.001235,-0.000718],"inputScale":[0.473082,0.576821,0.578011,0.576984,0.576871,0.288641,0.576585,0.287933,0.200934,0.28879,0.744785,0.638275],"w1":[[-0.928706,0.001281,0.001645,0.118655,-0.00269,0.060013,-0.001549,0.102637],[-0.002189,0.000735,-0.005153,0.09185,-1.012233,0.045266,-0.001733,0.0744],[-0.00556,0.00744,0.763883,-0.397607,-0.005014,-0.426542,0.858851,-0.470679],[-0.001583,-0.615467,-0.00525,-0.058345,0.006352,-0.032904,-0.002622,-0.049139],[-0.004232,0.614859,0.007782,0.057111,-0.002983,0.030109,0.002249,0.050353],[-0.012105,0.011914,0.002722,0.054138,-0.014903,0.031702,0.00756,0.023497],[0.000073,0.005448,-0.001079,0.003666,-0.001542,0.000894,-0.000678,0.00095],[0.016052,-0.01603,-0.002273,-0.013275,0.019638,-0.022357,-0.001807,0.024735],[0.002286,-0.005025,-0.001898,-0.006749,0.000907,0.00713,-0.003072,0.001157],[-0.002085,0.000042,0.004969,0.000133,-0.002495,-0.00004,0.003733,-0.000407],[-0.000035,0.000612,0.006995,-0.000261,-0.006785,0.001207,0.002627,0.000165],[0.005621,-0.007317,10.011774,-0.015672,0.008201,0.001575,5.330602,0.002089]],"b1":[-0.917958,0.960059,-2.568135,1.103186,-0.95597,0.394808,-1.762658,-0.825342],"w2":[-0.264279,0.203169,-0.337827,-0.597852,-0.187148,-0.894063,0.33997,-0.948499],"b2":-0.426175};
+  function paddleBrainEvaluate(features){
+    const m=PADDLE_BRAIN_MODEL;
+    if(!features || features.length!==m.inputSize) return NaN;
+    const hidden=new Array(m.hiddenSize);
+    for(let j=0;j<m.hiddenSize;j++){
+      let z=m.b1[j];
+      for(let i=0;i<m.inputSize;i++){
+        const x=(features[i]-m.inputMean[i])/m.inputScale[i];
+        z+=x*m.w1[i][j];
+      }
+      hidden[j]=Math.tanh(z);
+    }
+    let out=m.b2;
+    for(let j=0;j<m.hiddenSize;j++) out+=hidden[j]*m.w2[j];
+    return Number.isFinite(out)?out:NaN;
+  }
+  function paddleBrainFeatures(rel,ang,targetValue,hitX,landX,want,focus){
+    const vx=clamp(focus.vx/1200,-1,1);
+    const vy=clamp(Math.abs(focus.vy)/1200,0,1);
+    const speed=Math.hypot(vx,vy)/Math.SQRT2;
+    const alive=bricks.reduce((n,b)=>n+(b.alive?1:0),0);
+    const shapeIndex=Math.max(0,SHAPES.indexOf(shape));
+    const levelIndex=levelType();
+    return [rel,clamp(ang/1.25,-1,1),clamp(targetValue/4,-1,1),
+      clamp(hitX/W*2-1,-1,1),clamp(landX/W*2-1,-1,1),
+      clamp(Math.abs(want-paddle.x)/W,0,1),vx,vy,speed,
+      alive/Math.max(1,bricks.length),(shapeIndex-1.5)/1.5,(levelIndex-5.5)/4.5];
+  }
+
+  function brickStrategicValue(b, levelKind, snakeRemaining){
+    const type = b && b.type || 'normal';
+    if(levelKind === 7 && type === 'trap') return -8;       // 命中直接丢主球并扣心
+    if(type === 'bleed') return -2.8;                      // 启动限时失血
+    if(['drunk','spin','half','gravity'].includes(type)) return -2.2; // 操控/物理惩罚
+    if(levelKind === 6 && b.snakeIdx === 0)
+      return snakeRemaining <= 1 ? 3.5 : .05;
+    if(levelKind === 4 && type === 'blast') return 3.4;
+    if(levelKind === 5 && b.dive && b.dive.phase === 'dive') return 1.7;
+    return type === 'bonus' ? 3 : type === 'multi' ? 2.7 :
+      type === 'blast' ? 2.3 : type === 'slow' ? 1.9 :
+      type === 'tough' ? .6 : 1;
+  }
+
+  // 评价整条预测命中序列，而不是只看第一块砖。
+  // 第 10 关每次击中都会制造落砖危险，因此对密集连击附加可控风险成本。
+  function attackPathUtility(hits, levelKind, snakeRemaining){
+    const weights = [1,.52,.28,.15];
+    let utility = 0;
+    for(let i=0;i<hits.length;i++)
+      utility += brickStrategicValue(hits[i].b,levelKind,snakeRemaining) * (weights[i] || .08);
+    if(levelKind === 10) utility -= hits.length * .7;
+    return utility;
+  }
+
+  function planAim(landX, focus){
+    const r = focus.r;
+    const value = b => brickStrategicValue(
+      b, levelType(), snake ? snake.cells.length : 0
+    );
+    // 目标锁定滞回：当前目标仍有效时，除非新目标明显更优，否则不切换。
+    // 同一目标也惩罚接球点的大幅漂移，避免多个近似候选让挡板左右摇摆。
+    const previous = aimPlan;
+    let best = null;
+    for(let rel = -.78; rel <= .781; rel += .09){
+      if(Math.abs(rel) < .18) continue;   // 不用挡板中心接球
+      const t = (rel + 1) / 2;
+      const want = landX - t * paddle.w;
+      if(Math.abs(clamp(want, 2, W - paddle.w - 2) - want) > 1) continue; // 边缘够不到
+      // 挡板由一阶响应 x += (target-x)·dt·26 驱动，接触瞬间速度 ≈ 26·(目标 − 当前)
+      const Ux = paddleCommandVelocity(want, paddle.x);
+      const out = paddleReflect(focus.vx, focus.vy, rel, Ux);
+      const ang = Math.atan2(out.vx, -out.vy);
+      if(Math.abs(ang) > 1.25) continue;
+      const path = predictAttackPath(landX, surfaceY(t), out.vx, out.vy, r, want, Ux, 4);
+      const first = path.hits.length ? path.hits[0] : null;
+      if(!first) continue;
+      // 规则效用独立评估候选；真实物理保持权威。
+      const switchPenalty = previous && previous.brick && previous.brick.alive &&
+        previous.brick !== first.b ? .34 : 0;
+      const relPenalty = previous && previous.brick === first.b
+        ? Math.abs(rel - previous.rel) * .24 : 0;
+      const chainUtility=attackPathUtility(path.hits,levelType(),snake ? snake.cells.length : 0);
+      const vNorm=clamp(chainUtility/6,-1,1);
+      const aNorm=clamp(ang/1.25,-1,1);
+      const travel=clamp(Math.abs(want-paddle.x)/W,0,1);
+      const vxNorm=clamp(focus.vx/1200,-1,1);
+      const vyNorm=clamp(Math.abs(focus.vy)/1200,0,1);
+      const speedNorm=Math.hypot(vxNorm,vyNorm)/Math.SQRT2;
+      const shapeIndex=Math.max(0,SHAPES.indexOf(shape));
+      const levelIndex=levelType();
+      let ruleUtility=1.10*vNorm-.18*Math.abs(rel)-.12*Math.abs(aNorm)
+        -.10*travel-.07*travel*(.35+.65*speedNorm)
+        -.08*Math.abs(clamp(first.x/W*2-1,-1,1)-clamp(landX/W*2-1,-1,1));
+      if(shapeIndex===1) ruleUtility-=.12*Math.max(0,Math.abs(rel)-.52);
+      if(shapeIndex===2) ruleUtility-=.18*Math.max(0,Math.abs(rel)-.66);
+      if(shapeIndex===3) ruleUtility-=.10*Math.max(0,Math.abs(aNorm)-.72);
+      if(levelIndex===7) ruleUtility-=.48*Math.max(0,-vNorm);
+      if(levelIndex===4) ruleUtility+=.08*Math.max(0,vNorm);
+      if(levelIndex===6) ruleUtility+=.06*Math.max(0,vNorm);
+      if(levelIndex===9) ruleUtility+=.04*Math.max(0,vNorm);
+      if(levelIndex===10) ruleUtility+=.05*Math.max(0,vNorm);
+      // 连击潜力进入规则效用；首个真实预测目标与整条路径共同参与评分。
+      ruleUtility += .22 * clamp((chainUtility-value(first.b))/4,-.5,1);
+      const learned=paddleBrainEvaluate(
+        paddleBrainFeatures(rel,ang,value(first.b),first.x,landX,want,focus));
+      const utility=Number.isFinite(learned)
+        ? ruleUtility*.65+learned*.35 : ruleUtility;
+      const cost=-utility+switchPenalty+relPenalty
+        +(first.x<0||first.x>W?.08:0);
+      if(!best||cost<best.cost)
+        best={cost,rel,Ux,brick:first.b,err:0,need:ang,tx:first.x,chainCount:path.hits.length,brain:learned};
+    }
+    aimPlan = best || {rel:0, Ux:0, brick:null, err:0};
+  }
+
+  // Swept circle contact shared by Plinko's live physics and Auto prediction.
+  function plinkoSweepCircleContact(x0,y0,x1,y1,ballR,p){
+    const sx=x1-x0,sy=y1-y0,mx=x0-p.x,my=y0-p.y;
+    const a=sx*sx+sy*sy,minD=ballR+p.r,c=mx*mx+my*my-minD*minD;
+    let t=0;
+    if(c>=0){
+      if(a<=1e-18)return null;
+      const b=mx*sx+my*sy,disc=b*b-a*c;
+      if(disc<=0)return null;
+      t=(-b-Math.sqrt(disc))/a;
+      if(t<0||t>1)return null;
+    }
+    const dx=mx+sx*t,dy=my+sy*t,d=Math.hypot(dx,dy);
+    if(d<=1e-9)return null;
+    return {nx:dx/d,ny:dy/d,t,minD};
+  }
+  function plinkoSweepPocketHit(x0,y0,x1,y1,h){
+    const sx=x1-x0,sy=y1-y0,len2=sx*sx+sy*sy;
+    const t=len2>0?clamp(((h.x-x0)*sx+(h.y-y0)*sy)/len2,0,1):0;
+    const dx=x0+sx*t-h.x,dy=y0+sy*t-h.y,rr=h.r*.78;
+    return dx*dx+dy*dy<rr*rr;
+  }
+  // 第 8 关专用预测：共享真实物理的扫掠碰撞判定，避免高速球穿透机关。
+  // 只在球向下时预测；球上升阶段可能先撞砖，沿用最近一次可信落点。
+  function predictPlinkoLanding(o){
+    let x=o.x,y=o.y,vx=o.vx,vy=o.vy;
+    const r=o.r,dt=1/180,maxSteps=180*5;
+    for(let i=0;i<maxSteps;i++){
+      const prevX=x,prevY=y;
+      x+=vx*dt;y+=vy*dt;
+      if(x-r<2){x=2+r;vx=Math.abs(vx);}
+      if(x+r>W-2){x=W-2-r;vx=-Math.abs(vx);}
+      if(y-r<2){y=2+r;vy=Math.abs(vy);}
+      let bumperHit=false;
+      for(const p of plinkoBumpers){
+        const hit=plinkoSweepCircleContact(prevX,prevY,x,y,r,p);
+        if(!hit)continue;
+        const {nx,ny,minD}=hit;
+        x=p.x+nx*(minD+.5);y=p.y+ny*(minD+.5);
+        const dot=vx*nx+vy*ny;
+        if(dot<0){vx=(vx-2*dot*nx)*1.035;vy=(vy-2*dot*ny)*1.035;}
+        bumperHit=true;break;
+      }
+      if(bumperHit)continue;
+      for(const pocket of plinkoPockets)
+        if(plinkoSweepPocketHit(prevX,prevY,x,y,pocket))
+          return {x,eta:(i+1)*dt,pocketed:true};
+      if(vy>0&&y+r>=surfaceY(.5)-1)return {x:clamp(x,r,W-r),eta:(i+1)*dt,pocketed:false};
+      if(y-r>H+10)return {x:clamp(x,r,W-r),eta:(i+1)*dt,pocketed:false};
+    }
+    return null;
+  }
+
+  // 与 updateDivers() 相同的离散运动规则：逐 1/180 秒推进俯冲敌机，
+  // 复现追踪锁定、横向加速、边界回拉和旋转碰撞框，避免用线性近似猜落点。
+  function predictDiverThreat(d, paddleY, screenH, targetLeft, maxEta=1.35){
+    if(!d || d.phase !== 'dive' || d.vy <= 0) return null;
+    const dt=1/180, steps=Math.floor(maxEta/dt+1e-9);
+    let x=d.x, y=d.y, vx=d.vx, vy=d.vy, targetX=d.targetX, t=d.t||0, px=paddle.x;
+    const lo=2,hi=W-paddle.w-2,target=clamp(targetLeft,lo,hi);
+    const w=d.w, h=d.h;
+    const halfW=(w+14)/2, halfH=(h+8)/2;
+    for(let i=0;i<steps;i++){
+      const prevY=y;
+      t+=dt;
+      vy+=560*dt;
+      px=clamp(px+paddleCommandVelocity(target,px)*dt,lo,hi);
+      const aimNow=px+paddle.w/2;
+      if(y < paddleY-screenH*.40) targetX=aimNow;
+      if(t<1.2) vx+=(targetX-x)*1.0*dt;
+      if(x<12 || x>W-12) vx+=(W/2-x)*.8*dt;
+      vx=clamp(vx,-520,520);
+      x+=vx*dt; y+=vy*dt;
+      const rot=clamp(vx/430,-1,1)*.5;
+      const c=Math.abs(Math.cos(rot)), sn=Math.abs(Math.sin(rot));
+      const extentY=sn*halfW+c*halfH;
+      const extentX=c*halfW+sn*halfH;
+      const cy=Math.cos(rot)*4;
+      const bottom=y+cy+extentY;
+      const prevBottom=prevY+extentY;
+      const top=y+cy-extentY, sy=surfaceY(clamp((x-px)/paddle.w,0,1));
+      const overlapX=x+extentX>=px&&x-extentX<=px+paddle.w;
+      const crossed=prevBottom<=sy+6&&bottom>=sy-2;
+      const inside=bottom>=sy&&top<=paddleY+paddle.h+6;
+      if(vy>0&&overlapX&&(crossed||inside))
+        return {x:clamp(x,0,W),half:extentX,eta:(i+1)*dt,paddleX:px,kind:'diver',cooldownDuration:1.8};
+      if(y-extentY>screenH+26) return null;
+    }
+    return null;
+  }
+
+  // 与 updateSnakeRockets() 的 crossedPaddle / insidePaddle 判定对齐。
+  // 已进入挡板垂直碰撞带的火箭 ETA 记为 0，不能因负 ETA 被漏掉。
+  function predictSnakeRocketThreat(rocket,targetLeft,maxEta=1.35){
+    if(!rocket||rocket.vy<=0)return null;
+    const dt=1/180,steps=Math.floor(maxEta/dt+1e-9),r=rocket.r||5;
+    let x=rocket.x,y=rocket.y,px=paddle.x;
+    const lo=2,hi=W-paddle.w-2,target=clamp(targetLeft,lo,hi);
+    for(let i=0;i<steps;i++){
+      const prevY=y; px=clamp(px+paddleCommandVelocity(target,px)*dt,lo,hi);
+      y+=rocket.vy*dt; x+=(rocket.vx||0)*dt;
+      const crossed=prevY+r<=paddle.y&&y+r>=paddle.y;
+      const inside=y+r>=paddle.y&&y-r<=paddle.y+paddle.h;
+      const overlapX=x>=px-5&&x<=px+paddle.w+5;
+      if(overlapX&&(crossed||inside))return {x,half:r,eta:(i+1)*dt,paddleX:px,kind:'rocket',cooldownDuration:1.15};
+      if(y-r>paddle.y+paddle.h)return null;
+    }
+    return null;
+  }
+
+  // 第 10 关：按 updateFalling() 的重力、横移与碰撞盒，并模拟挡板执行器追踪候选目标。
+  // 返回候选挡板目标下真实会发生的碰撞，而不是把砖块投影到固定 paddle.y 平面。
+  function predictFallingCollision(f,targetX,maxEta=1.35){
+    if(!f||f.vy<0)return null;
+    const dt=1/180,steps=Math.ceil(maxEta/dt),gravity=1050;
+    let fx=f.x,fy=f.y,fvy=f.vy,px=paddle.x;
+    const halfW=f.w*.42,halfH=f.h*.42;
+    const lo=2,hi=W-paddle.w-2;
+    const target=clamp(targetX,lo,hi);
+    for(let i=0;i<steps;i++){
+      const prevY=fy;
+      fvy+=gravity*dt;
+      fx+=f.vx*dt;fy+=fvy*dt;
+      px+=paddleCommandVelocity(target,px)*dt;
+      px=clamp(px,lo,hi);
+      const tt=clamp((fx-px)/paddle.w,0,1),sy=surfaceY(tt);
+      const overlapX=fx+halfW>=px&&fx-halfW<=px+paddle.w;
+      const crossed=prevY+halfH<=sy+6&&fy+halfH>=sy-2;
+      const inside=fy+halfH>=sy&&fy-halfH<=paddle.y+paddle.h+6;
+      if(fvy>0&&overlapX&&(crossed||inside))
+        return {x:fx,half:halfW,eta:(i+1)*dt,paddleX:px,kind:'falling'};
+      if(fy-halfH>H+30||fx<-60||fx>W+60)return null;
+    }
+    return null;
+  }
+
+  // 思考层：统一预测特殊关卡来袭危险物到达挡板平面的横向位置。
+  // 这里保留与现有游戏更新一致的短时线性外推；更复杂的实体由专用物理预测器补充。
+  function collectAutoThreats(){
+    const threats = [];
+    const maxEta = 1.35, plane = paddle.y;
+    // 保留数组索引：真实 updateFalling() 逆序遍历，同帧多砖命中时先处理索引较大的砖。
+    for(let i=0;i<falling.length;i++){
+      const f=falling[i];
+      threats.push({kind:'falling',source:f,sourceIndex:i});
+    }
+    // 俯冲敌机使用与 updateDivers() 一致的离散运动规则预测到达挡板平面的位置。
+    // 预警期不会造成直接碰撞，故只预测已经进入 dive 阶段的敌机。
+    for(let i=0;i<divers.length;i++) threats.push({kind:'diver',source:divers[i],sourceIndex:i});
+    // 蛇头火箭按实际扫掠碰撞区预测；已进入挡板高度带的火箭保持紧急威胁。
+    for(let i=0;i<snakeRockets.length;i++) threats.push({kind:'rocket',source:snakeRockets[i],sourceIndex:i});
+    return threats;
+  }
+
+  // 按 updateFalling() 的冷却语义模拟一个候选轨迹上的多次落砖碰撞。
+  // 碰撞物即使在无敌期也会消失，但只有 hitCooldown 归零时才会扣心并重置 1.15 秒。
+  function scoreHazardCollisionSequence(events,initialCooldown=0){
+    const priority={diver:0,falling:1,rocket:2};
+    const ordered=events.slice().sort((a,b)=>
+      a.eta-b.eta || (priority[a.kind]??9)-(priority[b.kind]??9) ||
+      (b.sourceIndex||0)-(a.sourceIndex||0));
+    let cooldown=Math.max(0,initialCooldown),lastEta=0,risk=0,minGap=Infinity;
+    let damaging=0,ignored=0;
+    for(const event of ordered){
+      cooldown=Math.max(0,cooldown-Math.max(0,event.eta-lastEta));
+      lastEta=Math.max(lastEta,event.eta);
+      if(cooldown>0){ignored++;continue;}
+      damaging++;
+      minGap=Math.min(minGap,-event.overlap);
+      risk+=(event.overlap+12)*1.25/(.12+event.eta);
+      cooldown=event.cooldownDuration||1.15;
+    }
+    return {risk,minGap,damaging,ignored};
+  }
+
+  // 躲避层：在可行的挡板位置中评估危险物间隙与移动成本。
+  // 优先选择能避开最早/最近威胁的位置；不可避免时尽量减少重叠程度。
+  function chooseAutoEvasionTarget(attackTarget, threats){
+    const lo = 2, hi = W - paddle.w - 2;
+    const candidates = [clamp(attackTarget,lo,hi), clamp(paddle.x,lo,hi)];
+    const count = 24;
+    for(let i=0;i<=count;i++) candidates.push(lo+(hi-lo)*i/count);
+    for(const h of threats){
+      if(h.kind==='falling'||h.kind==='diver'||h.kind==='rocket') continue;
+      candidates.push(clamp(h.x-paddle.w/2-h.half-8,lo,hi));
+      candidates.push(clamp(h.x-paddle.w/2+h.half+8,lo,hi));
+    }
+    let best = clamp(attackTarget,lo,hi), bestScore = -Infinity;
+    for(const x of candidates){
+      const center=x+paddle.w/2;
+      let minGap=Infinity, risk=0;
+      const hazardEvents=[];
+      for(const h of threats){
+        let predicted=null;
+        if(h.kind==='falling') predicted=predictFallingCollision(h.source,x);
+        else if(h.kind==='diver') predicted=predictDiverThreat(h.source,paddle.y,H,x);
+        else if(h.kind==='rocket') predicted=predictSnakeRocketThreat(h.source,x);
+        if(!predicted)continue;
+        const impactLeft=predicted.paddleX===undefined?x:predicted.paddleX;
+        const impactCenter=impactLeft+paddle.w/2;
+        const overlap=Math.max(0,paddle.w/2+predicted.half+7-Math.abs(impactCenter-predicted.x));
+        if(overlap>0)hazardEvents.push({...predicted,kind:h.kind,overlap,sourceIndex:h.sourceIndex||0,
+          cooldownDuration:predicted.cooldownDuration||1.15});
+      }
+      const hazardScore=scoreHazardCollisionSequence(hazardEvents,hitCooldown);
+      risk+=hazardScore.risk;
+      minGap=Math.min(minGap,hazardScore.minGap);
+      const travel=Math.abs(x-paddle.x);
+      const attackDrift=Math.abs(x-attackTarget);
+      const earliestHazardEta=hazardEvents.length?Math.min(...hazardEvents.map(event=>event.eta)):Infinity;
+      const reachable=Number.isFinite(earliestHazardEta)&&travel>PADDLE_MAX_V*Math.max(.04,earliestHazardEta);
+      const score=Math.min(minGap, paddle.w*1.8)*2.2
+        -risk*3.5-attackDrift*.42-travel*.12-(reachable?18:0);
+      if(score>bestScore){bestScore=score;best=x;}
+    }
+    return best;
+  }
+
+  // 多球思考：锁定当前优先接球球体，只有新球明显更紧急时才切换。
+  function selectAutoFocusBall(){
+    const all=[ball,...extraBalls].filter(Boolean);
+    const descending=all.map(o=>({o,eta:o.vy>0?(paddle.y-o.y)/o.vy:Infinity}))
+      .filter(item=>item.eta>=0&&item.eta<Infinity);
+    const best=descending.reduce((a,b)=>!a||b.eta<a.eta?b:a,null);
+    const current=descending.find(item=>item.o===autoFocusBall);
+    let chosen;
+    if(current&&(!best||current.eta<=best.eta+.14)) chosen=current.o;
+    else if(best) chosen=best.o;
+    else chosen=all.includes(autoFocusBall)?autoFocusBall:ball;
+    autoFocusBall=chosen;
+    return chosen;
+  }
+
+  // 思考层：将当前局势归类，再由攻击/躲避/接球策略执行。
+  function assessAutoSituation(focus){
+    const eta=focus.vy>0?(paddle.y-focus.y)/focus.vy:Infinity;
+    const threats=collectAutoThreats();
+    const urgent=state==='playing'&&eta>=0&&eta<.18;
+    const activeBalls=[ball,...extraBalls].filter(Boolean).length;
+    const validPlan=aimPlan&&aimPlan.brick&&aimPlan.brick.alive?aimPlan:null;
+    const intent=validPlan?(validPlan.chainCount>1?'attack':'aim'):'normal';
+    // 生存优先级：紧急接球 > 危险躲避 > 多球协同 > 单球攻击/瞄准 > 普通定位。
+    // 多球模式仍保留 intent，确保 HUD/诊断知道当前是在攻击还是单纯接球。
+    const mode=urgent?'catch':threats.length?'dodge':activeBalls>1?'multiball':intent;
+    return {mode,intent,eta,threats,urgent,activeBalls};
+  }
+
+  function autoTargetX(){
+    // 多球时采用带滞回的优先球锁定，避免两颗球 ETA 接近时挡板反复换目标。
+    const focus = selectAutoFocusBall();
+    const r = focus.r;
+    // 弹珠台有弹力柱与扣命球袋，使用关卡专用前向模拟；不启用未经机关验证的攻击反推。
+    if(isCurseLevel()){
+      const predicted = focus.vy > 0 ? predictPlinkoLanding(focus) : null;
+      const safeX = predicted && !predicted.pocketed ? predicted.x
+        : (lastLandX || focus.x);
+      if(predicted && !predicted.pocketed) lastLandX = predicted.x;
+      return clamp(safeX-paddle.w/2,2,W-paddle.w-2);
+    }
+    let landX = focus.x;
+    if(state === 'playing' && focus.vy > 0){
+      // 曲面挡板各处高度差很大（三角形达 82px），要用「打算接球的那个部位」
+      // 的高度算落地时间，否则挡板一移动落点就预测偏了
+      const aimRel = aimPlan ? aimPlan.rel : 0;
+      const dy = surfaceY(clamp((aimRel + 1) / 2, 0, 1)) - focus.y - r;
+      const tt = dy > 0 ? dy / focus.vy : 0;
+      let x = focus.x + focus.vx * tt;
+      const lo = 2 + r, span = Math.max(1, (W - 2 - r) - lo);
+      let m = (x - lo) % (2 * span);
+      if(m < 0) m += 2 * span;
+      landX = lo + (m <= span ? m : 2 * span - m);
+      lastLandX = landX;
+      // 球下落时重新反推瞄准目标；球上升时沿用，挡板提前就位
+      if((aimTick++ % 3 === 0) || !aimPlan || (aimPlan.brick && !aimPlan.brick.alive))
+        planAim(landX, focus);
+    } else if(state === 'playing' && aimPlan && aimPlan.brick && !aimPlan.brick.alive){
+      // 多球时目标砖常被辅球先打掉：只换目标、不改接球点，挡板不会突然横跳
+      const keepRel = aimPlan.rel;
+      const want = (lastLandX || focus.x) - (keepRel + 1) / 2 * paddle.w;
+      const Ux = paddleCommandVelocity(want, paddle.x);
+      const out = paddleReflect(focus.vx, focus.vy, keepRel, Ux);
+      const ang = Math.atan2(out.vx, -out.vy);
+      const hit = predictFirstBrick(lastLandX || focus.x,
+        surfaceY(clamp((keepRel + 1) / 2, 0, 1)), ang, r);
+      if(hit) aimPlan = {cost:0, rel:keepRel, Ux, brick:hit.b, err:0, need:ang, tx:hit.x};
+    }
+    const rel = aimPlan ? aimPlan.rel : 0;
+    // 关键：让球落在挡板的 rel 位置，而不是永远落在中心
+    let target = clamp(landX - (rel + 1) / 2 * paddle.w, 2, W - paddle.w - 2);
+    // 保命优先：真要漏接了就放弃瞄准，用中心把球接住再说
+    if(state === 'playing' && focus.vy > 0 &&
+       (landX < target + 2 || landX > target + paddle.w - 2))
+      target = clamp(landX - paddle.w / 2, 2, W - paddle.w - 2);
+    // 四大智能环节中的「躲避」：独立收集落砖、俯冲敌机与蛇头火箭的预计撞击点。
+    // 球进入最后接球窗口时，接球安全优先级最高，不允许躲避逻辑把挡板带离球路。
+    const decision = assessAutoSituation(focus);
+    autoMode = decision.mode;
+    autoIntent = decision.intent;
+    if(decision.mode === 'dodge')
+      target = chooseAutoEvasionTarget(target, decision.threats);
+    return target;
+  }
+
+  // 砖块当前实际矩形：俯冲中的砖跟着敌机走，其余随编队整体摆动
+  // 所有碰撞、绘制、瞄准预测都走这里，避免「画在这儿、判定在那儿」
+  function brickRect(b){
+    if(b.dive) return {x:b.dive.x - b.w / 2, y:b.dive.y - b.h / 2, w:b.w, h:b.h};
+    const x = b.x + (isDiveLevel() ? formationSway : 0);
+    return {x, y:b.y, w:b.w, h:b.h};
+  }
+  // 敌机实体碰撞框覆盖旋转后的机翼与机头；尾焰属于特效，不计入受击范围。
+  function diverRect(d){
+    const angle = d.rot || 0, c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+    const hw = (d.w + 14) / 2, hh = (d.h + 8) / 2;
+    const cx = -Math.sin(angle) * 4, cy = Math.cos(angle) * 4;
+    const ex = c * hw + s * hh, ey = s * hw + c * hh;
+    return {x:d.x + cx - ex, y:d.y + cy - ey, w:ex * 2, h:ey * 2};
+  }
+
+  /*
+   * 统一空间索引（逻辑世界坐标，单位为 CSS px）：
+   * 实体保持连续坐标和真实尺寸；网格只负责宽相位候选筛选，不吸附或改变实体。
+   * 一个实体可以同时登记在多个格子里，因此大砖块、Boss、蛇身和移动敌机
+   * 都可以共享同一空间索引。精确碰撞仍由各自的窄相位几何判定完成。
+   */
+  class SpatialGrid {
+    constructor(cellSize){
+      this.cellSize = Math.max(8, cellSize || 24);
+      this.cells = new Map();
+      this.order = new Map();
+    }
+    clear(){ this.cells.clear(); this.order.clear(); }
+    key(x, y){ return x + ',' + y; }
+    insert(item, rect, order){
+      if(!rect || rect.w <= 0 || rect.h <= 0) return;
+      this.order.set(item, order);
+      const s = this.cellSize;
+      const x0 = Math.floor(rect.x / s), y0 = Math.floor(rect.y / s);
+      const x1 = Math.floor((rect.x + rect.w) / s), y1 = Math.floor((rect.y + rect.h) / s);
+      for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++){
+        const key = this.key(x, y);
+        let bucket = this.cells.get(key);
+        if(!bucket){ bucket = []; this.cells.set(key, bucket); }
+        bucket.push(item);
+      }
+    }
+    rebuild(items, rectOf){
+      this.clear();
+      for(let i = 0; i < items.length; i++){
+        const item = items[i];
+        if(item && item.alive) this.insert(item, rectOf(item), i);
+      }
+    }
+    queryAABB(rect, sourceLayer){
+      const found = new Set(), out = [];
+      const s = this.cellSize;
+      const x0 = Math.floor(rect.x / s), y0 = Math.floor(rect.y / s);
+      const x1 = Math.floor((rect.x + rect.w) / s), y1 = Math.floor((rect.y + rect.h) / s);
+      for(let y = y0; y <= y1; y++) for(let x = x0; x <= x1; x++){
+        const bucket = this.cells.get(this.key(x, y));
+        if(!bucket) continue;
+        for(const item of bucket){
+          if(sourceLayer != null && !((item.collisionMask || 0) & sourceLayer)) continue;
+          if(!found.has(item)){ found.add(item); out.push(item); }
+        }
+      }
+      // 保持旧版按 bricks 数组顺序处理碰撞的行为，避免改变同帧多重重叠时的优先级。
+      out.sort((a, b) => this.order.get(a) - this.order.get(b));
+      return out;
+    }
+  }
+  const worldGrid = new SpatialGrid(24);
+
+  // 统一棋盘尺子：逻辑格子始终为正方形，关卡只决定占用多少格。
+  // 视口变化只重新计算格子到 CSS 像素的映射；实体的行列与占格数不变。
+  // Canvas 的 DPR 变换在 resize() 中单独处理，这里不再做第二次缩放。
+  function boardRuler(slotRows){
+    const rowSlots = Math.max(1, slotRows || rows);
+    // 先保证边距和间距不会吃掉可用空间；极端窄屏/短屏时允许间距缩小，
+    // 单元格只由宽高共同约束，绝不设置最小像素尺寸把棋盘硬撑出画布。
+    const sideInset = Math.min(padX, Math.max(0, (W - 1) / 2));
+    const usableW = Math.max(0, W - sideInset * 2);
+    const gapX = cols > 1 ? usableW / (cols - 1) : gap;
+    const gapY = rowSlots > 1 ? Math.max(0, area) / (rowSlots - 1) : gap;
+    const cellGap = Math.max(0, Math.min(gap, gapX, gapY));
+    const cellW = Math.max(0, (usableW - cellGap * (cols - 1)) / Math.max(1, cols));
+    const cellH = Math.max(0, (Math.max(0, area) - cellGap * (rowSlots - 1)) / rowSlots);
+    const cell = Math.max(0, Math.min(cellW, cellH));
+    const step = cell + cellGap;
+    const gridW = cols * cell + (cols - 1) * cellGap;
+    const gridH = rowSlots * cell + (rowSlots - 1) * cellGap;
+    const originX = (W - gridW) / 2;
+    const originY = topInset + (Math.max(0, area) - gridH) / 2;
+    return {
+      cell, gap:cellGap, step, originX, originY, gridW, gridH,
+      rect(r, c, spanX, spanY){
+        const sx = Math.max(1, spanX || 1), sy = Math.max(1, spanY || 1);
+        return {
+          x: originX + c * step,
+          y: originY + r * step,
+          w: cell * sx + cellGap * (sx - 1),
+          h: cell * sy + cellGap * (sy - 1)
+        };
+      },
+      center(r, c){
+        return {x:originX + c * step + cell / 2,
+          y:originY + r * step + cell / 2, size:cell};
+      }
+    };
+  }
+  function layoutBricks(){
+    // 第一关专属：把砖块排成多层嵌套彩虹弧；只改变实体坐标，碰撞/预测继续共用 brickRect。
+    if(level === 1 && levelType() === LT.CLASSIC){
+      const alive = bricks.filter(b => b && b.alive);
+      const bandCount = Math.max(1, rows);
+      const thetaMax = .86;
+      const baseY = topInset + area * .96;
+      const outerRy = area * .76;
+      const ryStep = bandCount > 1 ? area * .50 / (bandCount - 1) : 0;
+      // 第一关沿用统一棋盘标尺：弧形只改变位置，每块砖仍是标准正方形。
+      const brickSide = boardRuler(rows).cell;
+      const bandSlots = new Map();
+      for(const b of alive){
+        const band = clamp(b.r, 0, bandCount - 1);
+        if(!bandSlots.has(band)) bandSlots.set(band, []);
+        bandSlots.get(band).push(b);
+      }
+      for(const [band, items] of bandSlots){
+        items.sort((a,z) => a.c-z.c);
+        const rx = W * (.46 - .022 * band);
+        const ry = Math.max(brickSide + 3, outerRy - ryStep * band);
+        const count = items.length;
+        const angularStep = count > 1 ? (2 * thetaMax) / (count - 1) : 0;
+        items.forEach((b,index) => {
+          const theta = count > 1
+            ? -thetaMax + angularStep * index
+            : 0;
+          b.layoutVisible = true;
+          b.layoutR = b.r; b.layoutC = b.c;
+          b.layoutSpanX = 1; b.layoutSpanY = 1;
+          b.w = brickSide; b.h = brickSide;
+          b.x = W * .5 + rx * Math.sin(theta) - brickSide / 2;
+          b.y = baseY - ry * Math.cos(theta) - brickSide / 2;
+        });
+      }
+      for(const b of bricks) if(!b.alive) b.layoutVisible = false;
+      rowCount = rows;
+      return;
+    }
+
+    if(isSnakeLevel()){
+      rowCount = rows; // 蛇关也要同步颜色渐变等依赖的实际行数。
+      const ruler = boardRuler(rows);
+      for(const b of bricks){
+        b.layoutVisible = !!b.alive;
+        b.layoutR = b.r; b.layoutC = b.c;
+        b.layoutSpanX = 1; b.layoutSpanY = 1;
+        const rect = ruler.rect(b.r, b.c);
+        b.x = rect.x; b.y = rect.y; b.w = rect.w; b.h = rect.h;
+      }
+      return;
+    }
+
+    // 第八关：小方砖分布在上半部的双层弧线上，整体明显上移并留出下方弹珠区。
+    if(isCurseLevel()){
+      const top = topInset + 38;
+      const bottom = Math.min(topInset + H * .31, top + H * .25);
+      const cx = W * .5, cy = top + (bottom - top) * .48;
+      const rings = [
+        {rx:W * .235, ry:H * .055},
+        {rx:W * .405, ry:H * .115}
+      ];
+      const alive = bricks.filter(b => b && b.alive);
+      const perRing = Math.ceil(alive.length / 2);
+      const side = clamp(W * .052, 17, 23);
+      alive.forEach((b,index) => {
+        const ringIndex = index < perRing ? 0 : 1;
+        const ring = rings[ringIndex];
+        const slot = ringIndex === 0 ? index : index - perRing;
+        const count = ringIndex === 0 ? perRing : alive.length - perRing;
+        const angle = -Math.PI/2 + (slot / Math.max(1,count)) * Math.PI*2
+                      + (ringIndex ? Math.PI/Math.max(1,count) : 0);
+        b.layoutVisible = true;
+        b.layoutR = b.r; b.layoutC = b.c;
+        b.layoutSpanX = 1; b.layoutSpanY = 1;
+        b.w = side;
+        b.h = side;
+        b.x = clamp(cx + Math.cos(angle)*ring.rx - side/2, 5, W-side-5);
+        b.y = clamp(cy + Math.sin(angle)*ring.ry - side/2, top, bottom-side);
+      });
+      for(const b of bricks) if(!b.alive) b.layoutVisible = false;
+      rowCount = rows;
+      return;
+    }
+
+    // 统一逻辑网格：实体可占用多个基础单元；先放大实体，再给其余实体分配空位。
+    // spanX/spanY 是期望占用量，layoutSpanX/layoutSpanY 是实际分配量。
+    const occupied = Array.from({length:rows}, () => Array(cols).fill(false));
+    const entries = bricks.filter(b => b && b.alive).map((b, index) => ({
+      b, index,
+      sx:clamp(Math.floor(b.spanX || 1), 1, cols),
+      sy:clamp(Math.floor(b.spanY || 1), 1, rows)
+    }));
+    entries.sort((a, z) => (z.sx*z.sy - a.sx*a.sy) || a.index - z.index);
+
+    const fits = (r, c, sx, sy) => {
+      if(r < 0 || c < 0 || r + sy > rows || c + sx > cols) return false;
+      for(let y=r; y<r+sy; y++) for(let x=c; x<c+sx; x++)
+        if(occupied[y][x]) return false;
+      return true;
+    };
+    const locate = (entry, sx, sy) => {
+      let best = null, bestScore = Infinity;
+      const ar = clamp(entry.b.r, 0, rows - 1), ac = clamp(entry.b.c, 0, cols - 1);
+      for(let r=0; r<=rows-sy; r++) for(let c=0; c<=cols-sx; c++){
+        if(!fits(r,c,sx,sy)) continue;
+        const score = Math.abs(r-ar) + Math.abs(c-ac);
+        if(score < bestScore){ bestScore=score; best={r,c}; }
+      }
+      return best;
+    };
+
+    for(const entry of entries){
+      const b = entry.b;
+      let sx=entry.sx, sy=entry.sy, pos=locate(entry,sx,sy);
+      // 空间不足时逐级缩小占用面积，尽量保留实体而不是让它消失。
+      while(!pos && (sx>1 || sy>1)){
+        if(sx >= sy && sx>1) sx--;
+        else if(sy>1) sy--;
+        else sx--;
+        pos=locate(entry,sx,sy);
+      }
+      if(!pos){
+        b.retire(); b.layoutVisible=false; b.w=0; b.h=0;
+        continue;
+      }
+      for(let y=pos.r; y<pos.r+sy; y++)
+        for(let x=pos.c; x<pos.c+sx; x++) occupied[y][x]=true;
+      b.layoutVisible=true;
+      b.layoutR=pos.r; b.layoutC=pos.c;
+      b.layoutSpanX=sx; b.layoutSpanY=sy;
+    }
+
+    rowCount = 1;
+    for(const b of bricks){
+      if(!b.alive || !b.layoutVisible) continue;
+      if(b.layoutR + b.layoutSpanY > rowCount) rowCount=b.layoutR+b.layoutSpanY;
+    }
+    const rc = Math.max(1, rowCount);
+    const ruler = boardRuler(rc);
+    for(const b of bricks){
+      if(!b.alive || !b.layoutVisible) continue;
+      const rect = ruler.rect(b.layoutR, b.layoutC, b.layoutSpanX, b.layoutSpanY);
+      b.x = rect.x; b.y = rect.y; b.w = rect.w; b.h = rect.h;
+    }
+    for(const b of bricks) if(!b.alive) b.layoutVisible=false;
+  }
+  function makeStars(){
+    stars = [];
+    const n = Math.round(clamp(W * H / 14000, 22, 55));
+    for(let i = 0; i < n; i++) stars.push({
+      x: Math.random() * W, y: Math.random() * H,
+      r: Math.random() * 1.4 + .4, a: Math.random() * .5 + .12,
+      s: Math.random() * 6 + 3, p: Math.random() * 6.28
+    });
+  }
+
+  /* ---------- 砖块：阵型与类型 ---------- */
+  // 每关换一种阵型，但保证每一行都至少有砖，砖块区高度不变
+  const PATTERNS = ['solid', 'checker', 'pyramid', 'diamond', 'wave', 'gates'];
+  function patternAt(name, r, c, rows, cols){
+    const mid = (cols - 1) / 2, rmid = (rows - 1) / 2;
+    switch(name){
+      case 'checker': return (r + c) % 2 === 0 || r % 3 === 0;
+      case 'pyramid': return Math.abs(c - mid) <= 1.05 + (r / Math.max(1, rows - 1)) * mid;
+      case 'diamond': return Math.abs(c - mid) / Math.max(1, mid) + Math.abs(r - rmid) / Math.max(1, rmid) <= 1.15 || Math.abs(c - mid) < 1.6;
+      case 'wave':    { const hole = (Math.floor(r * 1.6) + level) % cols;
+                        return c !== hole && c !== (hole + 1) % cols; }
+      case 'gates':   return Math.abs(c - mid) > 1.05 || r % 3 === 0;
+      default:        return true;   // 实心
+    }
+  }
+  // 按比例撒点而非纯随机，保证每种关卡的特殊砖数量稳定可控
+  function assignTypes(){
+    const t = levelType(), total = bricks.length, pool = bricks.slice();
+    if(t === LT.GALAGA || t === LT.SNAKE || t === LT.CURSE) return;   // 这两种由专用构建器接管
+    for(let i = pool.length - 1; i > 0; i--){
+      const j = Math.floor(Math.random() * (i + 1));
+      const tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+    }
+    const take = (type, n) => {
+      for(let k = 0; k < n && pool.length; k++){
+        const b = pool.pop(); b.type = type; b.hp = type === 'tough' ? 2 : 1;
+      }
+    };
+    if(t === LT.CLASSIC && level === 1) return;      // 教学关全普通
+    if(t === LT.CARNIVAL){
+      take('bonus', clamp(Math.round(total * .22), 6, 16));
+      take('multi', clamp(Math.round(total * .10), 3, 7));
+      take('slow',  clamp(Math.round(total * .05), 1, 4));
+    } else if(t === LT.FORTRESS){
+      take('tough', clamp(Math.round(total * .48), 12, 30));
+      take('bonus', clamp(Math.round(total * .05), 2, 5));
+      take('blast', clamp(Math.round(total * .04), 2, 4));
+    } else if(t === LT.CHAIN){
+      // 炸弹砖采用空间抽样：彼此至少隔开一格，避免相邻炸弹连锁清屏
+      const blastCount = clamp(Math.round(total * .14), 5, 10);
+      const candidates = pool.slice();
+      const selected = [];
+      for(const b of candidates){
+        if(selected.length >= blastCount) break;
+        const separated = selected.every(other =>
+          Math.abs(other.r - b.r) > 1 || Math.abs(other.c - b.c) > 1
+        );
+        if(separated) selected.push(b);
+      }
+      const blastSet = new Set(selected);
+      for(const b of selected){ b.type = 'blast'; b.hp = 1; }
+      for(let i = pool.length - 1; i >= 0; i--){
+        if(blastSet.has(pool[i])) pool.splice(i, 1);
+      }
+      take('bonus', clamp(Math.round(total * .05), 2, 5));
+      take('multi', clamp(Math.round(total * .04), 2, 4));
+    } else if(t === LT.TRAP){
+      // 陷阱关：固定少量危险砖与补给砖，普通砖才是通关目标。
+      take('trap', 4);
+      take('bleed', 4);
+      take('bonus', 3);
+    } else if(t === LT.SWARM){
+      take('multi', clamp(Math.round(total * .22), 8, 16));
+      take('bonus', clamp(Math.round(total * .05), 2, 5));
+      take('slow',  clamp(Math.round(total * .04), 1, 3));
+    } else {
+      take('bonus', clamp(Math.round(total * .045), 2, 4));
+      take('blast', clamp(Math.round(total * .05), 2, 4));
+      take('tough', clamp(Math.round(total * .06), 2, 4));
+      take('slow',  clamp(Math.round(total * .05), 1, 4));
+      take('multi', clamp(Math.round(total * .06), 2, 5));
+    }
+  }
+  function brickPalette(b){
+    if(b.type === 'bonus') return {a:'#ffe38a', b:'#f5922f', glow:'#ffc65c'};
+    if(b.type === 'blast') return {a:'#ff9a6a', b:'#cf362a', glow:'#ff6a3c'};
+    if(b.type === 'tough') return {a:'#c8d6f2', b:'#5369a4', glow:'#a9c0ff'};
+    if(b.type === 'slow')  return {a:'#a8f6e2', b:'#1d8fa6', glow:'#7ff0d8'};
+    if(b.type === 'multi') return {a:'#e6b8ff', b:'#7538bd', glow:'#cf92ff'};
+    if(b.type === 'trap')  return {a:'#ff9aa8', b:'#8e1424', glow:'#ff5c78'};
+    if(b.type === 'bleed') return {a:'#ffc1a8', b:'#a02b1c', glow:'#ff7a52'};
+    if(b.type === 'drunk') return {a:'#d6b0ff', b:'#5b2f9e', glow:'#c48cff'};
+    if(b.type === 'spin')  return {a:'#a8e6ff', b:'#1d5fa8', glow:'#6cc8ff'};
+    if(b.type === 'half')  return {a:'#c9c9d6', b:'#43435c', glow:'#9a9ab8'};
+    if(b.type === 'gravity')return {a:'#ffd9a0', b:'#8a5a12', glow:'#ffb954'};
+    const h = level === 1
+      ? (b.r / Math.max(1, rows - 1)) * 330
+      : 196 + b.r / Math.max(1, rowCount) * 132;
+    return {a: colorOf(b), b:'hsl(' + h + ',76%,40%)', glow:'hsl(' + h + ',96%,64%)'};
+  }
+
+  /* ---------- 关卡与状态：全程无弹窗 ---------- */
+  // 倒等边三角形：每下降一行，半宽按 1/√3 的像素比例收窄（斜边 60°），
+  // 顶行最宽、底行收成尖 —— 三条边等长，正是原版小蜜蜂上宽下窄的编队[citation:12]
+  function invTriAt(r){
+    const ruler = boardRuler(rows);
+    return (rows - 1 - r) * ruler.step / Math.sqrt(3) + ruler.cell * .12;
+  }
+  function galagaBricks(){
+    const arr = [], ruler = boardRuler(rows), bw = ruler.cell;
+    const mid = (cols - 1) / 2;
+    for(let r = 0; r < rows; r++) for(let c = 0; c < cols; c++){
+      if(Math.abs((c - mid) * (bw + ruler.gap)) > invTriAt(r)) continue;
+      // 顶排是 Boss Galaga：要 3 发才死[citation:6][citation:10]；其余 2 发，血量整体上调
+      const boss = r === 0;
+      arr.push(new GameEntity('brick', {r, c, alive:true, hp:boss ? 3 : 2, type:'normal', boss,
+                flash:0, dive:null, respawn:0, seed:Math.random()*6.28}));
+    }
+    return arr;
+  }
+  function newLevel(keepScore){
+    // 换关是世界重建边界：统一退役登记表中的旧实体，避免漏掉脱离数组的对象。
+    for(const entity of Array.from(entityRegistry.values())) entity.retire();
+    divers.length = 0;
+    if(!keepScore){ score = 0; lives = 3; level = 1; dmgScale = 1; }
+    area = brickArea();
+    // 进关时从「当前累计分」重新起算本关的补心门槛，跳关不白送心
+    nextHeartAt = score + heartStep(level);
+    heartGain = 0;                 // 换关重置补心配额
+    const t = levelType();
+    plinkoBumpers = []; plinkoPockets = [];
+    if(t === LT.FORTRESS){ fortressGateX = W*.5; fortressGateDir = 1; }
+    // 每次建关都重新选择逻辑列数，避免蛇关的宽网格泄漏到后续普通关卡。
+    cols = t === LT.SNAKE
+      ? clamp(Math.round(W / 30), 9, 18)
+      : clamp(Math.round(W / 50), 6, 10);
+    if(t === LT.SNAKE){
+      rows = clamp(Math.round(area / Math.max(1, (W - padX*2) / cols)), 10, 22);
+      area = Math.min(H * .54, availableBoardHeight());
+    } else {
+      rows = t === LT.GALAGA ? 6 : t === LT.TRAP ? 8
+           : clamp(Math.round(area / 38) + Math.min(2, Math.floor((level - 1) / 3)), 5, 10);
+    }
+    // 陷阱关采用稀疏棋盘：增大砖间距，给球路和躲避危险砖留出空间。
+    gap = t === LT.TRAP ? 9 : 3.5;
+    if(t === LT.TRAP) cols = clamp(Math.round(W / 43), 8, 10);
+    if(t === LT.GALAGA){
+      // 等边三角形：底边取满可用宽度，高 = √3/2×底边；反推行高，斜边从第一行就收窄
+      // 留 10% 边距给编队摆动，否则顶行贴边会被屏幕裁掉；底与高同比缩放，仍是等边
+      area = galagaBoardArea();
+    }
+    if(t === LT.CURSE){
+      area = Math.min(H * .22, availableBoardHeight() * .42);
+      cols = clamp(Math.round(W / 58), 5, 8);
+    }
+    const pat = PATTERNS[(level - 1) % PATTERNS.length];
+    const build = fill => {
+      const arr = [];
+      for(let r = 0; r < rows; r++) for(let c = 0; c < cols; c++){
+        const included = t === LT.CURSE ? r < 2
+                        : t === LT.TRAP ? (r + c) % 3 !== 0
+                        : patternAt(pat, r, c, rows, cols);
+        if(!fill && !included) continue;
+        arr.push(new GameEntity('brick', {r, c, alive:true, hp:1, type:'normal', boss:false,
+                  flash:0, dive:null, respawn:0, seed:Math.random()*6.28}));
+      }
+      return arr;
+    };
+    bricks = t === LT.GALAGA ? galagaBricks() : (t === LT.SNAKE ? [] : build(false));
+    // 专用关卡保留自己的阵型；普通图案太稀疏时才回退为满阵，并退役被替换的实体。
+    if(t !== LT.SNAKE && t !== LT.GALAGA && t !== LT.CURSE &&
+       bricks.length < Math.max(12, Math.floor(rows * cols * .4))){
+      for(const b of bricks) b.retire();
+      bricks = build(true);
+    }
+    if(t === LT.SNAKE) initSnake(); else { snake = null; snakeFoods = []; snakeRockets = []; if(t !== LT.CURSE) assignTypes(); }
+    if(t === LT.CURSE) buildPlinko();
+    layoutBricks();
+    prepareFortressLayout();
+    snapBall();
+    trail.length = 0; particles.length = 0;
+    falling.length = 0; hitCooldown = 0;
+    divers.length = 0; diveTimer = 1.2; formationSway = 0;
+    respawnQueue.length = 0; respawnBudget = (t === LT.GALAGA) ? 3 : 0;
+    galagaKills = 0;
+    extraBalls.length = 0; slowT = 0; aimPlan = null; lastLandX = 0;
+    bleed = null; curse = null;
+    if(!keepScore){ waves.length = 0; floaters.length = 0; shake = 0; }
+    hitFx = null;
+    // 每种关卡一条带底衬的飘字，不弹窗；快速跳关也不叠字
+    for(let i = floaters.length - 1; i >= 0; i--) if(floaters[i].hint) floaters.splice(i, 1);
+    const special = t !== LT.CLASSIC;
+    floaters.push({x:W/2, y:special ? H*.57 : topInset + area*.42,
+      text:LT_HINT[t], t:2.8, life:2.8,
+      color: t === LT.DROP ? '#ff9a6a' : t === LT.GALAGA ? '#ff8ad0'
+           : t === LT.TRAP ? '#ff7a7a' : t === LT.CURSE ? '#c48cff'
+           : t === LT.SNAKE ? '#8ff2a8' : '#ffd76a',
+      size:15, hint:true});
+    state = 'serving';   // 球停在挡板上，等玩家轻触或碰挡板才发
+    syncUI();
+  }
+  function snapBall(){
+    ball.x = paddle.x + paddle.w / 2;
+    ball.y = surfaceY(.5) - ball.r - 2;
+    ball.vx = 0; ball.vy = 0;
+  }
+  function launch(){
+    if(state !== 'serving') return;
+    state = 'playing';
+    shapeLocked = true;             // 一开局就锁定形状，本局不可更换
+    hitFx = null;
+    paddle.x = paddle.targetX;      // 触点即发球点，点哪从哪飞
+    ball.x = paddle.x + paddle.w / 2;
+    const a = (Math.random() - .5) * .7, sp = speed();
+    ball.vx = Math.sin(a) * sp;
+    ball.vy = -Math.cos(a) * sp;
+    ball.y = surfaceY(.5) - ball.r - 1;
+    trail.length = 0;
+    beep(680, .08, 'triangle', .06);
+    syncUI();
+  }
+  function addScore(n){
+    score += n;
+    // 跨过本关门槛补一颗心（最多 5 颗，每关最多 2 颗）。
+    // 门槛按当下关卡的成本递增 —— 这才是难度梯度，不动球速。
+    while(score >= nextHeartAt){
+      if(lives < 5 && heartGain < HEART_PER_LEVEL){
+        lives = Math.min(5, lives + 1);
+        heartGain++;
+        toastMsg('+' + heartStep(level) + ' 分 · 补充一颗心 ♥');
+        beep(760, .14, 'sine', .055);
+      }
+      nextHeartAt += heartStep(level);
+    }
+    if(score > best){ best = score; try{ localStorage.setItem('brick_best', String(best)); }catch(e){} }
+    syncUI();
+  }
+  function loseLife(){
+    lives = Math.max(0, lives - 1);
+    hitCooldown = Math.max(hitCooldown, 1.2);   // 重新准备发球期间不被落砖连砸
+    for(const e of extraBalls) e.retire();
+    extraBalls.length = 0; slowT = 0;           // 残球不留到下一发
+    beep(180, .22, 'sawtooth', .05);
+    trail.length = 0;
+    if(lives <= 0){
+      // 心用完：不弹窗、不提示确认，直接开新一局
+      resetGame();
+      toastMsg(autoPilot ? '心用完了 · Auto 自动重开' : '心用完了 · 重开，可选挡板');
+    } else {
+      state = 'serving';
+      snapBall();
+      toastMsg(autoPilot ? '还剩 ' + fmtLives() + ' · Auto 继续' : '还剩 ' + fmtLives() + ' · 点球继续');
+    }
+    syncUI();
+  }
+  function nextLevel(){
+    level++;
+    // 难度梯度写在「补心成本」上，球速不参与
+    toastMsg('第 ' + level + ' 关 · 补一颗心需 ' + heartStep(level) + ' 分');
+    beep(660 + Math.min(level, 20) * 15, .18, 'triangle', .06);
+    // 分数、心数、关卡数全部保留，重建砖块后球停在挡板上等发球
+    newLevel(true);
+  }
+  function resetGame(){
+    shapeLocked = false;            // 新的一局，可以重新挑挡板
+    newLevel(false);
+    beep(420, .09, 'sine', .05);
+  }
+  function togglePause(){
+    if(state === 'paused'){
+      state = pausedFrom === 'serving' ? 'serving' : 'playing';
+      last = performance.now();
+    } else if(state === 'playing' || state === 'serving'){
+      pausedFrom = state;
+      state = 'paused';
+    }
+    syncUI();
+  }
+  function toastMsg(t){ toast = {text:t, t:1.7}; }
+
+  /* ---------- 音效 ---------- */
+  function beep(f, d, type, vol){
+    try{
+      if(!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+      if(actx.state === 'suspended') actx.resume();
+      const o = actx.createOscillator(), g = actx.createGain();
+      o.type = type || 'square'; o.frequency.setValueAtTime(f, actx.currentTime);
+      g.gain.setValueAtTime(vol || .045, actx.currentTime);
+      g.gain.exponentialRampToValueAtTime(.0001, actx.currentTime + (d || .06));
+      o.connect(g); g.connect(actx.destination);
+      o.start(); o.stop(actx.currentTime + (d || .06));
+    }catch(e){}
+  }
+
+  /* ---------- 交互 ---------- */
+  function movePaddle(clientX){
+    const r = app.getBoundingClientRect();
+    const x = clientX - r.left - paddle.w / 2;
+    paddle.targetX = clamp(x, 2, W - paddle.w - 2);
+  }
+  function tapAction(){
+    if(state === 'serving') launch();          // 轻触立即发球
+    else if(state === 'paused') togglePause(); // 轻触继续
+  }
+  canvas.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    if(autoPilot){
+      // 挂机中忽略画布误触，避免放着一碰就退出 Auto；只有暂停时轻触可恢复
+      if(state === 'paused') togglePause();
+      return;
+    }
+    pointerDown = true; pointerId = e.pointerId;
+    try{ canvas.setPointerCapture(e.pointerId); }catch(err){}
+    movePaddle(e.clientX);
+    tapAction();
+  });
+  window.addEventListener('pointermove', e => {
+    if(autoPilot) return;          // 自动驾驶时鼠标/触摸不抢挡板控制权
+    if(pointerDown || e.pointerType === 'mouse') movePaddle(e.clientX);
+  }, {passive:true});
+  window.addEventListener('pointerup', e => { if(e.pointerId === pointerId){ pointerDown = false; pointerId = null; } });
+  window.addEventListener('pointercancel', () => { pointerDown = false; pointerId = null; });
+  document.addEventListener('contextmenu', e => e.preventDefault());
+  window.addEventListener('keydown', e => {
+    if(e.code === 'Space'){ e.preventDefault(); if(state === 'serving') launch(); else togglePause(); }
+    if(e.code === 'ArrowLeft')  paddle.targetX = clamp(paddle.targetX - 26, 2, W - paddle.w - 2);
+    if(e.code === 'ArrowRight') paddle.targetX = clamp(paddle.targetX + 26, 2, W - paddle.w - 2);
+  });
+
+  function updateShapeMenu(){
+    const menu = $('shapeMenu');
+    menu.classList.toggle('locked', shapeLocked);
+    for(const btn of menu.querySelectorAll('.shape')){
+      const on = btn.dataset.shape === shape;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
+  }
+  $('shapeMenu').addEventListener('click', e => {
+    const btn = e.target.closest('.shape');
+    if(!btn) return;
+    const next = btn.dataset.shape;
+    if(shapeLocked){
+      toastMsg('本局已锁定 · 点 ↻ 重开后可更换');
+      beep(240, .07, 'sine', .035);
+      return;
+    }
+    if(next === shape) return;
+    shape = next;
+    try{ localStorage.setItem('brick_shape', shape); }catch(err){}
+    updateShapeMenu();
+    snapBall();                 // 立刻按新形状重新摆放球
+    trail.length = 0; hitFx = null;
+    syncUI();
+    toastMsg(({rect:'圆角矩形挡板', moon:'新月形挡板', semicircle:'半圆形挡板', triangle:'等边三角形挡板'})[next]);
+    beep(620, .07, 'triangle', .05);
+  });
+
+  $('btnAuto').addEventListener('click', () => {
+    autoPilot = !autoPilot;
+    if(autoPilot){
+      if(state === 'serving') autoServeT = .35;   // 立刻准备自动开球
+      toastMsg('Auto 开启 · 自动瞄准砖块');
+      beep(880, .1, 'triangle', .055);
+    } else {
+      aimPlan = null;
+      toastMsg('Auto 关闭 · 手动操作');
+      beep(360, .08, 'sine', .045);
+    }
+    syncUI();
+  });
+
+  $('btnPause').addEventListener('click', togglePause);
+  $('btnReset').addEventListener('click', () => { resetGame(); toastMsg('已重新开局 · 可选挡板'); });
+  $('btnFull').addEventListener('click', async () => {
+    try{
+      if(document.fullscreenElement || document.webkitFullscreenElement){
+        if(document.exitFullscreen) await document.exitFullscreen();
+        else if(document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } else {
+        const el = document.documentElement;
+        if(el.requestFullscreen) await el.requestFullscreen({navigationUI:'hide'});
+        else if(el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+        // 屏幕方向锁定仅在部分支持的浏览器全屏状态下可用；CSS 横屏遮罩是兼容性兜底。
+        try{
+          if(screen.orientation && screen.orientation.lock)
+            await screen.orientation.lock('portrait');
+        }catch(lockError){}
+      }
+    }catch(e){ toastMsg('当前浏览器不支持全屏，可直接上滑隐藏地址栏'); }
+    setTimeout(scheduleResize, 120);
+  });
+  function onFsChange(){
+    $('btnFull').textContent = (document.fullscreenElement || document.webkitFullscreenElement) ? '退出' : '全屏';
+    scheduleResize(); setTimeout(scheduleResize, 250);
+  }
+  document.addEventListener('fullscreenchange', onFsChange);
+  document.addEventListener('webkitfullscreenchange', onFsChange);
+
+  let resizeTimer = null, resizeFallback = null;
+  function scheduleResize(){
+    if(resizeTimer) cancelAnimationFrame(resizeTimer);
+    if(resizeFallback) clearTimeout(resizeFallback);
+    resizeTimer = requestAnimationFrame(() => { resizeTimer = null; resize(); });
+    // 地址栏/全屏尺寸可能延迟稳定；只保留最后一次事件的收尾重排，避免旧定时器排队连环 resize。
+    resizeFallback = setTimeout(() => {
+      resizeFallback = null;
+      if(resizeTimer){ cancelAnimationFrame(resizeTimer); resizeTimer = null; }
+      resize();
+    }, 180);
+  }
+  window.addEventListener('resize', scheduleResize);
+  window.addEventListener('orientationchange', () => { setTimeout(scheduleResize, 200); });
+  if(window.visualViewport){
+    window.visualViewport.addEventListener('resize', scheduleResize);
+    window.visualViewport.addEventListener('scroll', scheduleResize);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if(document.hidden && state !== 'paused'){ pausedFrom = state; state = 'paused'; syncUI(); }
+    last = performance.now();
+  });
+
+  /* ---------- UI ---------- */
+  // 实测速率倍率是连续量：每几帧刷新一次读数，而不是只在得分/掉球时才变
+  let hudTick = 0;
+  function syncSpeedHUD(){
+    const mult = liveMult(), spEl = $('uiSpeed');
+    const txt = '×' + mult.toFixed(2);
+    if(spEl.textContent !== txt) spEl.textContent = txt;
+    spEl.title = '实测球速 / 基准（由物理碰撞演化，非关卡设定）';
+    spEl.classList.toggle('slow', slowT > 0);
+    spEl.classList.toggle('hot', slowT <= 0 && mult >= 1.5);
+    spEl.classList.toggle('max', slowT <= 0 && mult >= FURY_REF);
+  }
+  function syncUI(){
+    $('uiScore').textContent = String(score).padStart(4, '0');
+    $('uiBest').textContent = String(best).padStart(4, '0');
+    $('uiLives').textContent = fmtLives();
+    $('uiLevel').textContent = '第 ' + level + ' 关';
+    syncSpeedHUD();
+    const narrow = W > 0 && W < 390;
+    const ab = $('btnAuto');
+    ab.classList.toggle('on', autoPilot);
+    ab.setAttribute('aria-pressed', autoPilot ? 'true' : 'false');
+    const t = levelType(), tipEl = $('uiTip');
+    if(state === 'paused') tipEl.textContent = narrow ? '已暂停' : '已暂停 · 轻触继续';
+    else if(bleed && bleed.active)
+      tipEl.textContent = (narrow ? '失血 ' : '☠ 失血 ') + Math.ceil(bleed.t) + 's · '
+                        + bleed.kills + '/' + bleed.need;
+    else if(curse && (curse.drunkT > 0 || curse.spinT > 0 || curse.gravityT > 0))
+      tipEl.textContent = narrow ? '诅咒中' : '🌀 诅咒生效中 · 6s';
+    else if(isCurseLevel())
+      tipEl.textContent = state === 'serving' ? '弹珠台 · 点球发射' : '击碎剩余 ' + bricks.filter(b => b.alive).length + ' 块目标砖 · 躲开球袋';
+    else if(t === LT.FORTRESS)
+      tipEl.textContent = state === 'serving' ? '堡垒关 · 上墙双固定缺口' : '上墙缺口固定 · 下墙通道移动';
+    else if(t === LT.TRAP)
+      tipEl.textContent = state === 'serving' ? '陷阱关 · 清除非负面砖即可通关'
+        : '剩余目标砖 ' + bricks.filter(b => b.alive && b.type !== 'trap' && b.type !== 'bleed').length + ' 块 · 负面砖可留下';
+    else if(isSnakeLevel())
+      tipEl.textContent = state === 'serving' ? (narrow ? '贪吃蛇·点球' : '贪吃蛇关 · 点球发球')
+        : (narrow ? '打蛇尾' : '从尾巴打起 · 绿框');
+    else if(t === LT.GALAGA)
+      tipEl.textContent = state === 'serving'
+        ? (narrow ? '俯冲编队·点球' : '俯冲编队关 · 点球发球')
+        : (narrow ? '已击落 ' + galagaKills
+                  : '俯冲编队 · 已击落 ' + galagaKills);
+    else if(t === LT.DROP)
+      tipEl.textContent = state === 'serving' ? (narrow ? '落砖·点球' : '落砖关 · 点球发球')
+        : (autoPilot ? (narrow ? 'Auto 躲砖' : 'Auto 躲避落砖中')
+                     : (narrow ? '躲落砖' : '落砖关 · 躲开掉落的砖'));
+    else if(autoPilot)
+      tipEl.textContent = state === 'serving' ? (narrow ? 'Auto 发球' : 'Auto · 马上自动发球')
+        : (narrow ? 'Auto 瞄准' : 'Auto · 补心 ' + heartStep(level) + ' 分');
+    else
+      tipEl.textContent = state === 'serving' ? (narrow ? '点球发球' : '点球或碰挡板发球')
+        : (narrow ? '补心 ' + heartStep(level) : '补心 ' + heartStep(level) + ' 分 · 挡板改变球路');
+    $('btnPause').textContent = state === 'paused' ? '▶' : '⏸';
+    updateShapeMenu();
+  }
+
+  /* ---------- 物理 ---------- */
+  function update(dt){
+    time += dt;
+    if((hudTick++ % 6) === 0) syncSpeedHUD();   // 实测倍率连续读数
+    // 减速倒计时：暂停时不消耗；归零后按原比例把阻尼冲量撤掉
+    if(state !== 'paused' && slowT > 0){
+      slowT = Math.max(0, slowT - dt);
+      if(slowT === 0){
+        scaleAllSpeeds(1 / SLOW_FACTOR);
+        toastMsg('恢复 · 速度 ×' + (1 / SLOW_FACTOR).toFixed(2));
+        beep(620, .1, 'triangle', .045);
+        syncUI();
+      }
+    }
+    if(state !== 'serving') autoServeT = .5;   // 每次重新进入待发球，都给半秒准备
+    if(state !== 'paused' && autoPilot) paddle.targetX = autoTargetX();
+    if(state !== 'paused'){
+      if(isFortressLevel()){
+        const half = W*.14;
+        fortressGateX += fortressGateDir * fortressGateSpeed() * dt;
+        if(fortressGateX < half+4){ fortressGateX=half+4; fortressGateDir=1; }
+        if(fortressGateX > W-half-4){ fortressGateX=W-half-4; fortressGateDir=-1; }
+      }
+      const prevPX = paddle.x;
+      const desiredPXV = paddleCommandVelocity(paddle.targetX, paddle.x);
+      paddle.x += desiredPXV * dt;
+      paddle.vx = (paddle.x - prevPX) / Math.max(dt, .001);
+
+      // Galaga 敌机在物理子步内与球同步推进；待发球时才按整帧更新。
+      // 避免敌机只按上一帧或本帧终点位置参与碰撞检测。
+      if(isDiveLevel()){
+        formationSway = (Math.sin(time * 1.55) * .75 + Math.sin(time * 3.1) * .25)
+                      * Math.min(W * .06, 25);
+        if(state === 'playing'){
+          diveTimer -= dt;
+          if(diveTimer <= 0){
+            launchDiver();
+            diveTimer = Math.max(.7, 1.7 - level * .02) + Math.random() * .5;
+          }
+        } else {
+          // 待发球时没有物理子步，敌机仍按整帧推进。
+          updateDivers(dt);
+          updateRespawns(dt);
+        }
+      }
+
+      if(state === 'serving'){
+        snapBall();   // 球贴着挡板随挡板移动
+        if(autoPilot){
+          autoServeT -= dt;
+          if(autoServeT <= 0) launch();   // 自动驾驶：不用点，自己开球
+        }
+      } else if(state === 'playing'){
+        // 按场上「实际」最大速率拆子步（不是标称速率）：挡板做功加速后同样不穿砖、不漏接
+        let vmax = Math.hypot(ball.vx, ball.vy);
+        for(const e of extraBalls) vmax = Math.max(vmax, Math.hypot(e.vx, e.vy));
+        if(isDiveLevel()){
+          let diverVmax = 0;
+          for(const d of divers) if(d.alive && d.phase !== 'warn')
+            diverVmax = Math.max(diverVmax, Math.hypot(d.vx, d.vy));
+          // 以球与敌机的相对速度估算子步，避免快敌机在两个碰撞样本间跨过球。
+          vmax += diverVmax;
+        }
+        const steps = clamp(Math.ceil(vmax * dt / 6), 3, 96), sdt = dt / steps;
+        // 球与 Galaga 敌机使用相同的物理子步，避免敌机整帧瞬移后只检查一个位置。
+        // 非 Galaga 关卡的砖块静态，整帧只需重建一次；Galaga 每个子步同步更新并重建。
+        for(let s = 0; s < steps; s++){
+          if(state !== 'playing') break;   // 掉球/通关后立刻停，避免同帧重复判定
+          if(isDiveLevel()){
+            const simTime = time - dt + (s + 1) * sdt;
+            formationSway = (Math.sin(simTime * 1.55) * .75 + Math.sin(simTime * 3.1) * .25)
+                          * Math.min(W * .06, 25);
+            updateDivers(sdt);
+            updateRespawns(sdt);
+            if(state !== 'playing') break;
+          }
+          if(isDiveLevel() || s === 0){
+            const diverByBrick = new Map();
+            for(const d of divers) if(d.alive && d.b) diverByBrick.set(d.b, d);
+            const colliders = [];
+            for(const b of bricks){
+              if(!b.alive) continue;
+              const d = diverByBrick.get(b);
+              colliders.push(d && d.phase !== 'warn' ? d : b);
+            }
+            worldGrid.rebuild(colliders, item => item.entityKind === 'galaga-diver'
+              ? diverRect(item) : brickRect(item));
+          }
+          const paddleStepStart=prevPX+(paddle.x-prevPX)*(s/steps);
+          const paddleStepEnd=prevPX+(paddle.x-prevPX)*((s+1)/steps);
+          stepBall(sdt,paddleStepStart,paddleStepEnd);
+          if(state === 'playing') stepExtraBalls(sdt,paddleStepStart,paddleStepEnd);
+        }
+        if(state === 'playing'){
+          trail.push({x:ball.x, y:ball.y});
+          const trailMax = Math.round(clamp(11 + (liveMult() - 1) * 9, 11, 32));
+          while(trail.length > trailMax) trail.shift();
+        } else if(trail.length) trail.shift();
+      }
+    }
+
+    if(state !== 'paused') updateFalling(dt);
+    if(isSnakeLevel() && state !== 'paused'){ updateSnake(dt); updateSnakeRockets(dt); }
+    if(isTrapLevel() && state !== 'paused') updateBleed(dt);
+    if(isCurseLevel() && state !== 'paused') updateCurse(dt);
+    checkClear();   // 落砖关要等空中落砖全部清理完才进下一关
+
+    for(let i = particles.length - 1; i >= 0; i--){
+      const p = particles[i];
+      p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 460 * dt; p.life -= dt;
+      if(p.life <= 0) particles.splice(i, 1);
+    }
+    for(let i = waves.length - 1; i >= 0; i--){ waves[i].t -= dt; if(waves[i].t <= 0) waves.splice(i, 1); }
+    for(let i = floaters.length - 1; i >= 0; i--){ floaters[i].t -= dt; if(floaters[i].t <= 0) floaters.splice(i, 1); }
+    if(shake > 0) shake = Math.max(0, shake - dt * 26);
+    for(const b of bricks) if(b.flash > 0) b.flash = Math.max(0, b.flash - dt * 4);
+    if(toast){ toast.t -= dt; if(toast.t <= 0) toast = null; }
+    if(hitFx){ hitFx.t -= dt; if(hitFx.t <= 0) hitFx = null; }
+  }
+
+  function stepBall(dt, paddleStartX, paddleEndX){
+    const px = ball.x, py = ball.y;
+    if(curse && state === 'playing' && !isCurseLevel()){
+      if(curse.spinT > 0){
+        const om = .55 * dt, c = Math.cos(om), si = Math.sin(om);
+        const vx0 = ball.vx, vy0 = ball.vy;
+        ball.vx = vx0*c - vy0*si; ball.vy = vx0*si + vy0*c;
+      }
+      if(curse.gravityT > 0) ball.vy += 240 * dt;
+    }
+    ball.x += ball.vx * dt; ball.y += ball.vy * dt;
+    const r = ball.r;
+
+    if(ball.x - r < 2){ ball.x = 2 + r; ball.vx = Math.abs(ball.vx); beep(300,.03,'sine',.025); }
+    if(ball.x + r > W - 2){ ball.x = W - 2 - r; ball.vx = -Math.abs(ball.vx); beep(300,.03,'sine',.025); }
+    if(ball.y - r < 2){ ball.y = 2 + r; ball.vy = Math.abs(ball.vy); beep(360,.03,'sine',.025); }
+
+    if(isFortressLevel()) collideFortressWalls(ball, px, py);
+
+    // 月牙必须区分内弧与外弧：内弧向上反弹，外弧向下反弹。
+    if(shape === 'moon') moonContact(ball,px,py,true,paddleStartX,paddleEndX);
+    else shapedPaddleContact(ball,px,py,true,paddleStartX,paddleEndX);
+
+    // 弹珠台弹力柱与球袋碰撞。
+    if(isCurseLevel()) {
+      for(const p of plinkoBumpers){
+        const hit=plinkoSweepCircleContact(px,py,ball.x,ball.y,r,p);
+        if(hit){
+          const {nx,ny,minD}=hit;
+          ball.x=p.x+nx*(minD+.5);ball.y=p.y+ny*(minD+.5);
+          const dot=ball.vx*nx+ball.vy*ny;
+          if(dot<0){ball.vx=(ball.vx-2*dot*nx)*1.035;ball.vy=(ball.vy-2*dot*ny)*1.035;}
+          spawnParticles(p.x+nx*p.r,p.y+ny*p.r,'#65eaff',7);
+          waves.push({x:p.x,y:p.y,r0:p.r*.6,max:p.r*.9,t:.22,life:.22,color:'#65eaff'});
+          beep(520+Math.random()*180,.045,'triangle',.035);return;
+        }
+      }
+      for(const h of plinkoPockets){
+        if(plinkoSweepPocketHit(px,py,ball.x,ball.y,h)){
+          spawnParticles(h.x,h.y,'#ff557e',18); shake=Math.max(shake,9);
+          toastMsg('🕳 掉进球袋 · 扣 1 ♥'); loseLife(); return;
+        }
+      }
+    }
+
+    // 砖块（一次只处理一处碰撞）；俯冲中的敌机也能被球击落
+    for(const b of worldGrid.queryAABB({x:ball.x-r, y:ball.y-r, w:r*2, h:r*2}, COLLISION_LAYER.PROJECTILE)){
+      if(!b.alive) continue;
+      const q = b.entityKind === 'galaga-diver' ? diverRect(b) : brickRect(b);
+      if(ball.x + r < q.x || ball.x - r > q.x + q.w || ball.y + r < q.y || ball.y - r > q.y + q.h) continue;
+      // 依据上一帧位置判断反弹轴
+      if(py + r <= q.y || py - r >= q.y + q.h){
+        ball.vy = -ball.vy;
+        ball.y = py + (ball.vy > 0 ? -r - .5 : r + .5);
+      } else {
+        ball.vx = -ball.vx;
+        ball.x = px + (ball.vx > 0 ? -r - .5 : r + .5);
+      }
+      damageBrick(b.entityKind === 'galaga-diver' ? b.b : b);
+      return;
+    }
+
+    // 掉球：主球扣一颗心并停在挡板上待发射；辅球掉出底部直接消失、不扣血
+    if(ball.y - r > H + 6) loseLife();
+  }
+
+  // 额外球：独立物理，撞砖复用 damageBrick，掉出屏幕直接消失、不扣血
+  function stepExtraBalls(dt, paddleStartX, paddleEndX){
+    for(let i = extraBalls.length - 1; i >= 0; i--){
+      const e = extraBalls[i];
+      if(!e || state !== 'playing') continue;
+      const px = e.x, py = e.y, r = e.r;
+      if(curse){
+        if(curse.spinT > 0){
+          const om=.55*dt, c=Math.cos(om), si=Math.sin(om);
+          const vx0=e.vx, vy0=e.vy; e.vx=vx0*c-vy0*si; e.vy=vx0*si+vy0*c;
+        }
+        if(curse.gravityT > 0) e.vy += 240*dt;
+      }
+      e.x += e.vx * dt; e.y += e.vy * dt;
+      if(e.x - r < 2){ e.x = 2 + r; e.vx = Math.abs(e.vx); }
+      if(e.x + r > W - 2){ e.x = W - 2 - r; e.vx = -Math.abs(e.vx); }
+      if(e.y - r < 2){ e.y = 2 + r; e.vy = Math.abs(e.vy); }
+
+      if(isFortressLevel()) collideFortressWalls(e, px, py);
+
+      if(shape === 'moon') moonContact(e,px,py,false,paddleStartX,paddleEndX);
+      else shapedPaddleContact(e,px,py,false,paddleStartX,paddleEndX);
+      if(isCurseLevel()){
+        let bumperHit=false;
+        for(const p of plinkoBumpers){
+          const hit=plinkoSweepCircleContact(px,py,e.x,e.y,r,p);
+          if(!hit)continue;
+          const {nx,ny,minD}=hit;
+          e.x=p.x+nx*(minD+.5);e.y=p.y+ny*(minD+.5);
+          const dot=e.vx*nx+e.vy*ny;
+          if(dot<0){e.vx=(e.vx-2*dot*nx)*1.035;e.vy=(e.vy-2*dot*ny)*1.035;}
+          spawnParticles(p.x+nx*p.r,p.y+ny*p.r,'#65eaff',5);
+          waves.push({x:p.x,y:p.y,r0:p.r*.6,max:p.r*.9,t:.22,life:.22,color:'#65eaff'});
+          bumperHit=true;break;
+        }
+        if(bumperHit){
+          e.trail.push({x:e.x,y:e.y});
+          if(e.trail.length>7)e.trail.shift();
+          continue;
+        }
+        for(const pocket of plinkoPockets){
+          if(plinkoSweepPocketHit(px,py,e.x,e.y,pocket)){
+            e.retire();extraBalls.splice(i,1);break;
+          }
+        }
+        if(!extraBalls.includes(e))continue;
+      }
+      for(const b of worldGrid.queryAABB({x:e.x-r, y:e.y-r, w:r*2, h:r*2}, e.collisionLayer)){
+        if(!b.alive) continue;
+        const q = b.entityKind === 'galaga-diver' ? diverRect(b) : brickRect(b);
+        if(e.x + r < q.x || e.x - r > q.x + q.w || e.y + r < q.y || e.y - r > q.y + q.h) continue;
+        if(py + r <= q.y || py - r >= q.y + q.h){
+          e.vy = -e.vy; e.y = py + (e.vy > 0 ? -r - .5 : r + .5);
+        } else {
+          e.vx = -e.vx; e.x = px + (e.vx > 0 ? -r - .5 : r + .5);
+        }
+        damageBrick(b.entityKind === 'galaga-diver' ? b.b : b);
+        if(state !== 'playing') return;
+        break;
+      }
+      if(e.y - r > H + 6){ e.retire(); extraBalls.splice(i, 1); continue; }
+      e.trail.push({x:e.x, y:e.y});
+      if(e.trail.length > 7) e.trail.shift();
+    }
+  }
+
+  function spawnParticles(x, y, color, n){
+    for(let i = 0; i < n && particles.length < 260; i++) particles.push({
+      x, y, vx: (Math.random() - .5) * 260, vy: (Math.random() - .5) * 260 - 60,
+      s: Math.random() * 3.5 + 1.5, life: Math.random() * .35 + .3, color
+    });
+  }
+
+  /* ---------- 减速砖：规则层换挡，不是把速率拉回标称 ---------- */
+  // 减速砖：给全场速度一次性乘一个系数（相当于规则层的阻尼冲量）。
+  // 各球之间由物理演化出的速率差异原样保留，不把谁拉回「标称值」。
+  function scaleAllSpeeds(k){
+    if(state === 'playing'){ ball.vx *= k; ball.vy *= k; }
+    for(const e of extraBalls){ e.vx *= k; e.vy *= k; }
+  }
+  function applySlow(){
+    const again = slowT > 0;
+    slowT = SLOW_SECONDS;            // 不叠加：连吃也只刷新到 2 秒，不累计成 4、6 秒
+    if(!again) scaleAllSpeeds(SLOW_FACTOR);
+    toastMsg(again ? '减速续上 · ×' + SLOW_FACTOR.toFixed(2)
+                   : '❄ 减速 ×' + SLOW_FACTOR.toFixed(2) + ' · ' + SLOW_SECONDS + ' 秒');
+    floaters.push({x:ball.x, y:ball.y - 24, text:'SLOW', t:1, life:1, color:'#8ff2dd', size:13});
+    beep(300, .14, 'sine', .05);
+    syncUI();
+  }
+
+  /* ---------- 多球砖 ---------- */
+  function spawnMultiBalls(src, srcRect){
+    const room = MAX_BALLS - 1 - extraBalls.length;
+    const n = Math.min(2, Math.max(0, room));
+    if(!n) return;
+    const q = srcRect || brickRect(src);
+    const sp = speed(), cx = q.x + q.w / 2, cy = q.y + q.h / 2;
+    for(let i = 0; i < n; i++){
+      const a = (i === 0 ? -.6 : .6) + (Math.random() - .5) * .25;
+      extraBalls.push(new GameEntity('extra-ball', {
+        x: cx + (i === 0 ? -10 : 10), y: cy,
+        vx: Math.sin(a) * sp, vy: -Math.abs(Math.cos(a) * sp),
+        r: ball.r, trail: []
+      }));
+    }
+    const count = extraBalls.length + 1;
+    floaters.push({x:cx, y:cy, text:'✕' + count + ' 多球', t:1.1, life:1.1, color:'#dcb0ff', size:14});
+    beep(740, .12, 'triangle', .05);
+  }
+
+  /* ---------- 砖块受伤：主球与额外球共用 ---------- */
+  function triggerEffect(b, rect){
+    if(isSnakeLevel()) return;            // 蛇身的特殊花纹只作外观，不额外触发效果
+    if(b.type === 'slow') applySlow();
+    if(b.type === 'multi') spawnMultiBalls(b, rect);
+    if(b.type === 'bleed') startBleed();
+    if(b.type === 'drunk' || b.type === 'spin' || b.type === 'half' || b.type === 'gravity')
+      applyCurse(b.type);
+  }
+  function checkClear(){
+    if(state !== 'playing' || falling.length) return;
+    if(isSnakeLevel()){ if(snake && snake.cells.length === 0) nextLevel(); return; }
+    if(isCurseLevel()){ if(bricks.length && bricks.every(b => !b.alive)) nextLevel(); return; }
+    if(isDiveLevel()){
+      // 不再要求凑满固定击落数，也不等待尚未生成的补位队列；
+      // 场上没有存活敌机、也没有正在俯冲的敌机时立即通关。
+      if(divers.length || bricks.some(b => b.alive)) return;
+      respawnQueue.length = 0;
+      respawnBudget = 0;
+      nextLevel(); return;
+    }
+    if(!bricks.length) return;
+    if(isTrapLevel()){
+      // 陷阱与失血砖是负面砖，可留在场上；其余所有砖都必须清除。
+      if(!bricks.some(b => b.alive && b.type !== 'trap' && b.type !== 'bleed')) nextLevel();
+      return;
+    }
+    if(isFortressLevel()){
+      // 堡垒关只有普通砖与耐久砖是清关目标；奖励砖/爆炸砖是附属障碍，不阻止通关。
+      if(bricks.some(b => b.alive && (b.type === 'normal' || b.type === 'tough'))) return;
+      nextLevel();
+      return;
+    }
+    if(bricks.every(k => !k.alive)) nextLevel();
+  }
+  function scheduleRespawn(b){
+    if(!isDiveLevel() || respawnBudget <= 0) return;
+    respawnBudget--;
+    respawnQueue.push({r:b.r, c:b.c, boss:!!b.boss, t:2.6 + Math.random()*1.4});
+  }
+  function damageBrick(b){
+    const q = brickRect(b), t = levelType(), diveRef = b.dive;
+    // 小蜜蜂：俯冲中可被击落且分值翻倍；刚归队/补位淡入时无敌（不伤球、不伤挡板）
+    if(t === LT.GALAGA && b.respawn > 0){
+      spawnParticles(q.x + q.w/2, q.y + q.h, '#ff9ad0', 3);
+      beep(200, .035, 'square', .03);
+      return;
+    }
+    // 贪吃蛇：身体可被击破；身体清空前蛇头免疫，最后击中蛇头才击杀
+    if(t === LT.SNAKE){
+      hitSnakeSegment(b, q);
+      return;
+    }
+    // 陷阱砖：打到直接丢失主球、扣一颗心
+    if(b.type === 'trap'){
+      b.retire();
+      spawnParticles(q.x + q.w/2, q.y + q.h/2, '#ff5c78', 12);
+      waves.push({x:q.x + q.w/2, y:q.y + q.h/2, r0:4, max:60, t:.4, life:.4, color:'#ff5c78'});
+      shake = Math.max(shake, 8);
+      beep(140, .2, 'sawtooth', .06);
+      toastMsg('☠ 踩中陷阱 · 主球丢失');
+      checkClear();
+      loseLife();
+      return;
+    }
+    if(t === LT.DROP){
+      // 落砖关：不炸、不碎、不连锁，整块砖脱落变成自由落体
+      b.retire();
+      spawnFalling(b);
+      addScore(10 + (level - 1) * 2);
+      if(b.type === 'bonus'){
+        addScore(50);
+        floaters.push({x:q.x + q.w/2, y:q.y, text:'+50', t:.85, life:.85, color:'#ffe38a', size:14});
+      }
+      triggerEffect(b, q);
+      beep(b.type === 'bonus' ? 820 : 360, .055, 'triangle', .045);
+    } else {
+      b.hp -= dmgScale;               // half 诅咒：伤害永久减半
+      b.flash = 1;
+      if(t === LT.GALAGA) b.wounded = true;
+      if(b.hp > 1e-6){
+        addScore(10 + (level - 1) * 2);
+        spawnParticles(ball.x, ball.y, brickPalette(b).a, 4);
+        beep(300, .045, 'square', .04);
+      } else {
+        shatter(b, q);
+        beep(b.type === 'bonus' ? 920 : (b.type === 'blast' ? 220 : 440 + b.r * 24),
+             .055, b.type === 'bonus' ? 'triangle' : 'square', .045);
+      }
+      // 俯冲中击落得分翻倍（原版规则）
+      if(t === LT.GALAGA) addScore(30 + (level - 1) * 2);
+    }
+    // 只有真正击落（不是擦伤）才撤销俯冲并安排补位；擦伤时敌机仍在俯冲、可继续受击
+    if(!b.alive && diveRef){
+      const k = divers.indexOf(diveRef);
+      if(k >= 0) divers.splice(k, 1);
+      galagaKills++;
+      scheduleRespawn(b);
+    }
+    if(bleed && bleed.active && b.type === 'normal' && !b.alive) bleedOnBrick();
+    checkClear();
+  }
+
+  /* ---------- 陷阱关：持续失血 + 一颗心补给 ---------- */
+  const BLEED_SECONDS = 10, BLEED_NEED = 6;   // 提高挑战：10 秒内打掉 6 块普通砖
+  function startBleed(){
+    if(bleed && bleed.active){ bleed.t = BLEED_SECONDS; return; }
+    bleed = {active:true, t:BLEED_SECONDS, need:BLEED_NEED, kills:0};
+    toastMsg('☠ 持续失血 · ' + BLEED_SECONDS + ' 秒内打掉 ' + BLEED_NEED + ' 块砖');
+    beep(180, .25, 'sawtooth', .06);
+  }
+  function bleedOnBrick(){
+    bleed.kills++;
+    // 期间每打掉一块砖补半颗心，但只补到 3 颗 —— 不让失血砖变成刷血机
+    if(lives < 3) addLives(.5);
+    if(bleed.kills >= bleed.need){
+      bleed.active = false;
+      toastMsg('✔ 止血成功 · 打掉 ' + bleed.need + ' 块砖');
+      beep(720, .16, 'triangle', .06);
+    }
+  }
+  function updateBleed(dt){
+    if(!bleed || !bleed.active) return;
+    bleed.t -= dt;
+    if(bleed.t <= 0){
+      bleed.active = false;
+      lives = 0;
+      toastMsg('☠ 失血过多 · 重新开局');
+      resetGame();
+    }
+  }
+  /* ---------- 诅咒关：负面砖 ---------- */
+  function applyCurse(kind){
+    if(!curse) curse = {drunkT:0, spinT:0, gravityT:0, friction:FRICTION};
+    if(kind === 'half'){
+      dmgScale = .5;                    // 本局永久：所有砖都要多打一下
+      toastMsg('🌀 伤害永久减半 · 砖更耐打');
+    } else {
+      curse[kind + 'T'] = 6;
+      if(kind === 'drunk') curse.friction = .04 + Math.random() * .9; // 挡板表面打滑
+      const nm = {drunk:'失去准度 · 挡板打滑 6 秒', spin:'旋转球 · 球路会拐弯 6 秒',
+                  gravity:'重力场 · 球被往下拽 6 秒'}[kind];
+      toastMsg('🌀 ' + nm);
+    }
+    beep(260, .18, 'sawtooth', .05);
+  }
+  function updateCurse(dt){
+    if(!curse) return;
+    for(const k of ['drunkT','spinT','gravityT']) curse[k] = Math.max(0, curse[k] - dt);
+  }
+  /* ---------- 落砖关：砖块自由落体，挡板要躲 ---------- */
+  function spawnFalling(b){
+    // 保持危险物数量上限；满载时回收最早生成的一块，不能让刚击中的砖凭空消失。
+    if(falling.length >= 90){
+      const oldest = falling.shift();
+      if(oldest) oldest.retire();
+    }
+    const q = brickRect(b);
+    falling.push(new GameEntity('falling-brick', {
+      x: q.x + q.w / 2, y: q.y + q.h / 2, py: q.y + q.h / 2,
+      w: q.w, h: q.h,
+      vx: clamp(ball.vx * .16, -150, 150) + (Math.random() - .5) * 45,
+      vy: 60 + Math.random() * 50,
+      rot: 0, vr: (Math.random() - .5) * 3.6,
+      pal: brickPalette(b), seed: b.seed, t: 0
+    }));
+  }
+  function updateFalling(dt){
+    if(hitCooldown > 0) hitCooldown = Math.max(0, hitCooldown - dt);
+    for(let i = falling.length - 1; i >= 0; i--){
+      const f = falling[i];
+      if(!f) continue;                    // 心用完重开时数组会被清空
+      f.py = f.y;
+      f.vy += 1050 * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      f.rot += f.vr * dt;
+      f.t += dt;
+      const halfW = f.w * .42, halfH = f.h * .42;
+      const tt = clamp((f.x - paddle.x) / paddle.w, 0, 1);
+      const sy = surfaceY(tt);
+      const overlapX = f.x + halfW >= paddle.x && f.x - halfW <= paddle.x + paddle.w;
+      const crossed = f.py + halfH <= sy + 6 && f.y + halfH >= sy - 2;
+      const inside = f.y + halfH >= sy && f.y - halfH <= paddle.y + paddle.h + 6;
+      if(f.vy > 0 && overlapX && (crossed || inside)){
+        f.retire();
+        falling.splice(i, 1);
+        hitByHazard(f, '砖块');
+        if(!falling.length) break;       // 可能已重开，数组被清空
+        continue;
+      }
+      if(f.y - halfH > H + 30 || f.x < -60 || f.x > W + 60){
+        f.retire();
+        falling.splice(i, 1);
+      }
+    }
+  }
+  function hitByHazard(f, label){
+    spawnParticles(f.x, f.y, '#ff9a6a', 10);
+    shake = Math.max(shake, 10);
+    beep(150, .18, 'sawtooth', .05);
+    if(hitCooldown > 0) return;          // 短暂无敌：一堆砖同时砸下也只扣一颗
+    hitCooldown = label === '俯冲' ? 1.8 : 1.15;
+    lives = Math.max(0, lives - 1);
+    floaters.push({x:f.x, y:Math.min(f.y, paddle.y - 34), text:'−1 ♥',
+      t:1.1, life:1.1, color:'#ff7a6a', size:17});
+    if(lives <= 0){
+      resetGame();
+      toastMsg(autoPilot ? '被砸光了 · Auto 自动重开' : '被砸光了 · 重新开局');
+    } else {
+      toastMsg(label + '砸中！还剩 ' + fmtLives());
+    }
+    syncUI();
+  }
+  function drawFalling(){
+    for(const f of falling){
+      const halfW = f.w / 2, halfH = f.h / 2;
+      // 下方一截虚线轨迹，方便预判落点
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,150,90,.5)'; ctx.lineWidth = 2;
+      ctx.setLineDash([4, 6]);
+      ctx.beginPath(); ctx.moveTo(f.x, f.y + halfH + 2);
+      ctx.lineTo(f.x + f.vx * .07, f.y + halfH + 44); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+
+      ctx.save();
+      ctx.translate(f.x, f.y); ctx.rotate(f.rot);
+      ctx.shadowColor = '#ff7a4c';
+      ctx.shadowBlur = 12 + 6 * Math.sin(time * 8 + f.seed);
+      const g = ctx.createLinearGradient(-halfW, -halfH, halfW, halfH);
+      g.addColorStop(0, f.pal.a); g.addColorStop(1, f.pal.b);
+      ctx.fillStyle = g;
+      roundRect(-halfW, -halfH, f.w, f.h, Math.min(5, f.h * .22)); ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255,185,125,.95)'; ctx.lineWidth = 1.6;
+      roundRect(-halfW, -halfH, f.w, f.h, Math.min(5, f.h * .22)); ctx.stroke();
+      // 警示斜纹
+      ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(-halfW * .55, -halfH * .55); ctx.lineTo(halfW * .05, halfH * .55);
+      ctx.moveTo(halfW * .1, -halfH * .55); ctx.lineTo(halfW * .7, halfH * .55);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+  /* ---------- 贪吃蛇关：先清身体，最后击中蛇头 ---------- */
+  const SNAKE_HP = 1, SNAKE_MAX = 30, SNAKE_STEP = .5;
+  const SNAKE_FOOD_MAX = 3, SNAKE_FOOD_INTERVAL = 1.8, SNAKE_ROCKET_GAP = 3.4;
+  const SNAKE_SKINS = ['normal','bonus','blast','tough','slow','multi'];
+  function initSnake(){
+    const mid = Math.floor(rows / 2);
+    snake = {cells:[], moveT:SNAKE_STEP, foodT:SNAKE_FOOD_INTERVAL, rocketT:1.8};
+    snakeFoods = []; snakeRockets = [];
+    // 初始蛇身收在棋盘中央的窄区域，不再横贯整行堵住上下通道。
+    // 三行 × 最多六列，保留一条有长度的蛇，同时给蛇头留下绕行空间。
+    const snakeCols = Math.min(6, cols);
+    const startCol = Math.floor((cols - snakeCols) / 2);
+    const len = Math.min(SNAKE_MAX, snakeCols * 3), path = [];
+    for(let band = 0; band < 3 && path.length < len; band++){
+      const rr = mid - band;
+      if(rr < 0) break;
+      if(band % 2 === 0){
+        for(let c=startCol+snakeCols-1;c>=startCol && path.length<len;c--) path.push({r:rr,c});
+      } else {
+        for(let c=startCol;c<startCol+snakeCols && path.length<len;c++) path.push({r:rr,c});
+      }
+    }
+    for(let i = 0; i < len; i++)
+      snake.cells.push({r:path[i].r, c:path[i].c,
+                        type:SNAKE_SKINS[i % SNAKE_SKINS.length], hp:SNAKE_HP});
+    // path 从右往左生成，cells[0] 就是蛇头，最后一项是尾
+    syncSnakeBricks();
+    spawnSnakeFood();
+  }
+  function syncSnakeBricks(){
+    const old = bricks, next = snake.cells.map((cell, i) => {
+      const b = cell.entity && cell.entity.alive
+        ? cell.entity : new GameEntity('brick', {flash:0, dive:null, respawn:0, seed:Math.random()*6.28});
+      cell.entity = b; // 实体身份跟随蛇节对象，而不是跟随数组下标。
+      b.r=cell.r; b.c=cell.c; b.type=cell.type; b.hp=cell.hp;
+      b.snakeIdx=i; b.boss=false; b.flash=Math.max(0,b.flash||0);
+      return b;
+    });
+    const retained = new Set(next);
+    for(const b of old) if(b && b.alive && !retained.has(b)) b.retire();
+    bricks = next;
+    layoutBricks();
+  }
+  function spawnSnakeFood(){
+    if(!snake || snakeFoods.length >= SNAKE_FOOD_MAX) return;
+    const occupied = new Set(snake.cells.map(c => c.r + ',' + c.c));
+    for(const f of snakeFoods) occupied.add(f.r + ',' + f.c);
+    const free = [];
+    for(let r = 0; r < rows; r++) for(let c = 0; c < cols; c++)
+      if(!occupied.has(r + ',' + c)) free.push({r,c});
+    if(free.length) snakeFoods.push(free[Math.floor(Math.random()*free.length)]);
+  }
+  function hitSnakeSegment(b, q){
+    const hitIndex = b.snakeIdx;
+    if(!snake || hitIndex < 0 || hitIndex >= snake.cells.length) return;
+    const hitCell = snake.cells[hitIndex];
+    // 身体尚未清空时，蛇头免疫；只剩蛇头后，命中头部才完成击杀。
+    if(hitIndex === 0 && snake.cells.length > 1){
+      b.flash = .65;
+      beep(170, .045, 'sine', .025);
+      floaters.push({x:q.x + q.w/2, y:q.y, text:'先清身体，再爆头', t:.8, life:.8, color:'#ffd27f', size:12});
+      return;
+    }
+    hitCell.hp = 0; b.hp = 0; b.flash = 1;
+    addScore(20 + (level - 1) * 2);
+    spawnParticles(q.x + q.w/2, q.y + q.h/2, brickPalette(b).a, 8);
+    beep(440, .06, 'square', .05);
+
+    // 身体段被击中后消除，后半段向前收一格；只剩蛇头时才允许爆头击杀。
+    const oldPositions = snake.cells.map(cell => ({r:cell.r, c:cell.c}));
+    snake.cells.splice(hitIndex, 1);
+    for(let i = hitIndex; i < snake.cells.length; i++){
+      snake.cells[i].r = oldPositions[i].r;
+      snake.cells[i].c = oldPositions[i].c;
+    }
+    floaters.push({x:q.x + q.w/2, y:q.y, text:'蛇身 −1', t:.9, life:.9, color:'#8ff2a8', size:13});
+    syncSnakeBricks(); // 空蛇也要经过同步，确保最后一节实体正式退役。
+    checkClear();
+  }
+  function updateSnake(dt){
+    if(!snake || state !== 'playing') return;
+    if(snakeFoods.length < SNAKE_FOOD_MAX){ snake.foodT -= dt; if(snake.foodT <= 0){ spawnSnakeFood(); snake.foodT = SNAKE_FOOD_INTERVAL; } }
+    snake.rocketT -= dt;
+    if(snake.rocketT <= 0 && snake.cells.length){
+      const h = snake.cells[0], hb = bricks.find(b => b.snakeIdx === 0);
+      if(hb){ const q=brickRect(hb); snakeRockets.push(new GameEntity('snake-rocket',{x:q.x+q.w/2,y:q.y+q.h+3,vy:Math.max(260,H*.62),r:5,trail:[]})); }
+      snake.rocketT = SNAKE_ROCKET_GAP + Math.random()*1.2;
+    }
+    snake.moveT -= dt;
+    if(snake.moveT > 0) return;
+    snake.moveT = SNAKE_STEP;
+    const head = snake.cells[0], cand = [];
+    for(const d of [{r:0,c:1},{r:0,c:-1},{r:1,c:0},{r:-1,c:0}]){
+      const r = head.r + d.r, c = head.c + d.c;
+      if(r < 0 || r >= rows || c < 0 || c >= cols) continue;
+      if(snake.cells.some(x => x.r === r && x.c === c)) continue;
+      cand.push({r, c});
+    }
+    if(!cand.length){ snake.cells.reverse(); syncSnakeBricks(); return; }   // 掉头后同步实体索引与身份
+    if(snakeFoods.length){
+      const target = snakeFoods.reduce((best,f) => {
+        const d = Math.abs(head.r-f.r)+Math.abs(head.c-f.c);
+        return !best || d < best.d ? {food:f,d} : best;
+      }, null).food;
+      cand.sort((a,z) => (Math.abs(a.r-target.r)+Math.abs(a.c-target.c))
+                       - (Math.abs(z.r-target.r)+Math.abs(z.c-target.c)));
+    } else if(Math.random() < .3) cand.sort(() => Math.random() - .5);
+    const pick = cand[0];
+    snake.cells.unshift({r:pick.r, c:pick.c,
+      type:SNAKE_SKINS[snake.cells.length % SNAKE_SKINS.length], hp:SNAKE_HP});
+    const foodIndex = snakeFoods.findIndex(f => f.r === pick.r && f.c === pick.c);
+    const ate = foodIndex >= 0;
+    const grow = ate && snake.cells.length < SNAKE_MAX;
+    if(ate){
+      snakeFoods.splice(foodIndex,1); snake.foodT = SNAKE_FOOD_INTERVAL;
+      addScore(50);
+      floaters.push({x:W/2, y:topInset+area*.3, text:'🐍 进食 +50', t:.9, life:.9, color:'#8ff2a8', size:13});
+      beep(620, .1, 'triangle', .05);
+    }
+    if(!grow) snake.cells.pop();
+    syncSnakeBricks();
+  }
+  function snakeCellCenter(cell){
+    return boardRuler(rows).center(cell.r, cell.c);
+  }
+  function drawSnakeFood(){
+    if(!snakeFoods.length) return;
+    for(let i=0;i<snakeFoods.length;i++){
+      const p=snakeCellCenter(snakeFoods[i]), R=p.size*.23*(.85+.15*Math.sin(time*7+i));
+      ctx.save(); ctx.shadowColor='#ffe38a'; ctx.shadowBlur=14;
+      const g=ctx.createRadialGradient(p.x,p.y,1,p.x,p.y,R);
+      g.addColorStop(0,'#fff8d0'); g.addColorStop(1,'#ff9a3c');
+      ctx.fillStyle=g; ctx.beginPath(); ctx.arc(p.x,p.y,R,0,6.283); ctx.fill(); ctx.restore();
+    }
+  }
+  // 火箭不参与砖块碰撞，直接穿过蛇身；抵达挡板高度时造成一次危险命中。
+  function updateSnakeRockets(dt){
+    for(let i=snakeRockets.length-1;i>=0;i--){
+      const r=snakeRockets[i], prevY=r.y;
+      r.y+=r.vy*dt; r.trail.push({x:r.x,y:r.y});
+      if(r.trail.length>7) r.trail.shift();
+      // 火箭高速上升时按前后位置扫过挡板平面，不能只检查帧末坐标，否则可能穿板。
+      const crossedPaddle = r.vy > 0 && prevY + r.r <= paddle.y && r.y + r.r >= paddle.y;
+      const insidePaddle = r.y + r.r >= paddle.y && r.y - r.r <= paddle.y + paddle.h;
+      const overlapX = r.x >= paddle.x - 5 && r.x <= paddle.x + paddle.w + 5;
+      if(overlapX && (crossedPaddle || insidePaddle)){
+        r.retire(); snakeRockets.splice(i,1); hitByHazard({x:r.x,y:r.y},'蛇头火箭');
+        // 最后一颗心会触发 resetGame() 并清空火箭数组；必须退出旧数组的倒序遍历。
+        if(state !== 'playing' || !snakeRockets.length) break;
+        continue;
+      }
+      if(r.y>H+20){ r.retire(); snakeRockets.splice(i,1); }
+    }
+  }
+  function drawSnakeRockets(){
+    for(const r of snakeRockets){
+      ctx.save(); ctx.strokeStyle='rgba(255,105,115,.45)'; ctx.lineWidth=3; ctx.lineCap='round';
+      ctx.beginPath(); for(let i=0;i<r.trail.length;i++){const p=r.trail[i]; i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);} ctx.stroke();
+      ctx.translate(r.x,r.y); ctx.shadowColor='#ff765f'; ctx.shadowBlur=12;
+      ctx.fillStyle='#ffb36b'; ctx.beginPath(); ctx.moveTo(0,-8); ctx.lineTo(4,4); ctx.lineTo(0,2); ctx.lineTo(-4,4); ctx.closePath(); ctx.fill();
+      ctx.fillStyle='#fff0c2'; ctx.fillRect(-1,2,2,5); ctx.restore();
+    }
+  }
+
+  /* ---------- 小蜜蜂：击落位置自动补位（原版下一波补满） ---------- */
+  function updateRespawns(dt){
+    if(!isDiveLevel()) return;
+    for(let i = respawnQueue.length - 1; i >= 0; i--){
+      const q = respawnQueue[i];
+      q.t -= dt;
+      if(q.t > 0) continue;
+      respawnQueue.splice(i, 1);
+      if(bricks.some(b => b.alive && b.r === q.r && b.c === q.c)) continue;
+      const nb = new GameEntity('brick', {r:q.r, c:q.c, alive:true, hp:q.boss?3:2, type:'normal', boss:q.boss,
+                  flash:0, dive:null, respawn:.65, seed:Math.random()*6.28});
+      bricks.push(nb);
+      layoutBricks();
+      floaters.push({x:nb.x + nb.w/2, y:nb.y, text:'补位', t:.9, life:.9,
+        color:'#ff8ad0', size:12});
+    }
+  }
+
+  /* ---------- 编队俯冲关（Galaga 精华） ---------- */
+  // 敌机从编队底部离队 → 锁定挡板画预警线 → 划弧俯冲 → 砸中扣心 / 飞出后归队
+  function launchDiver(){
+    const limit = level >= 30 ? 4 : 3;
+    if(divers.length >= limit) return;
+    const pool = bricks.filter(b => b.alive && !b.dive && b.respawn <= 0);
+    if(!pool.length) return;
+    // 像 Galaga 一样多从编队下缘起飞；擦伤过的优先再冲，方便补刀[citation:1][citation:2]
+    pool.sort((a, z) => (z.wounded?1:0)-(a.wounded?1:0) || z.r - a.r || Math.random() - .5);
+    const b = pool[Math.floor(Math.random() * Math.min(10, pool.length))];
+    const q = brickRect(b);
+    const aim = paddle.x + paddle.w / 2;
+    const d = new GameEntity('galaga-diver', {
+      alive:true, b, x:q.x + q.w / 2, y:q.y + q.h / 2, py:q.y + q.h / 2,
+      w:q.w, h:q.h,
+      vx:(Math.random() - .5) * 190 + (aim - (q.x + q.w / 2)) * .2,
+      vy:110, targetX:aim, phase:'warn', t:0, rot:0, passed:false,
+      trail:[], seed:b.seed, pal:brickPalette(b)
+    });
+    b.dive = d;
+    divers.push(d);
+    beep(720, .08, 'sawtooth', .03);
+  }
+  function recallDiver(d, hit){
+    const k = divers.indexOf(d);
+    if(k >= 0) divers.splice(k, 1);
+    d.retire();
+    if(d.b){ d.b.dive = null; d.b.respawn = .65; }   // 回到编队原位，短暂淡入
+    if(hit) hitByHazard(d, '俯冲');
+  }
+  function recallAllDivers(){
+    for(const d of divers.slice()){ d.retire(); if(d.b){ d.b.dive = null; d.b.respawn = .4; } }
+    divers.length = 0;
+  }
+  function updateDivers(dt){
+    for(const b of bricks) if(b.respawn > 0) b.respawn = Math.max(0, b.respawn - dt);
+    for(let i = divers.length - 1; i >= 0; i--){
+      const d = divers[i];
+      if(!d || !d.alive) continue;           // 防止已退役实体继续更新
+      d.t += dt;
+      if(d.phase === 'warn'){
+        // 预警期仍跟着编队摆动，闪红 + 一条指向挡板的锁定线，给玩家反应时间
+        d.x = d.b.x + formationSway + d.b.w / 2;
+        d.y = d.b.y + d.b.h / 2;
+        if(d.t >= .45){ d.phase = 'dive'; d.t = 0; beep(400, .12, 'sawtooth', .045); }
+        continue;
+      }
+      d.py = d.y;
+      d.vy += 560 * dt;                     // 俯冲加速（放缓：给球更多拦截窗口）
+      // 原版俯冲是完整冲到底再回位：持续追踪挡板直到接近挡板平面才锁死，
+      // 保证不会「还没碰到挡板就半路飘走归队」，末段仍留出横移躲避窗口[citation:2]
+      const aimNow = paddle.x + paddle.w / 2;
+      if(d.y < paddle.y - H * .40) d.targetX = aimNow;   // 进入下 40% 屏高就锁死
+      if(d.t < 1.2) d.vx += (d.targetX - d.x) * 1.0 * dt;
+      if(d.x < 12 || d.x > W - 12) d.vx += (W / 2 - d.x) * .8 * dt;
+      d.vx = clamp(d.vx, -520, 520);
+      d.x += d.vx * dt; d.y += d.vy * dt;
+      d.rot = clamp(d.vx / 430, -1, 1) * .5;
+      d.trail.push({x:d.x, y:d.y - d.h * .5});
+      if(d.trail.length > 11) d.trail.shift();
+
+      const hitRect = diverRect(d), halfH = hitRect.h / 2;
+      const tt = clamp((d.x - paddle.x) / paddle.w, 0, 1);
+      const sy = surfaceY(tt);
+      const overlapX = hitRect.x + hitRect.w >= paddle.x && hitRect.x <= paddle.x + paddle.w;
+      const crossed = d.py + hitRect.h / 2 <= sy + 6 && hitRect.y + hitRect.h >= sy - 2;
+      const inside = hitRect.y + hitRect.h >= sy && hitRect.y <= paddle.y + paddle.h + 6;
+      if(d.y + halfH >= paddle.y - 12) d.passed = true;
+      if(overlapX && (crossed || inside)){
+        recallDiver(d, true);
+        if(!divers.length) break;          // 可能已重开
+        continue;
+      }
+      // 只有完整冲过挡板平面、飞出屏幕后才归队；绝不半途折返
+      if(d.passed && d.y - halfH > H + 26) recallDiver(d, false);
+    }
+  }
+  function drawGalagaSprite(b, cx, cy, size, pulse){
+    const boss = !!b.boss || b.r === 0;
+    const butterfly = !boss && b.r <= Math.max(1, Math.ceil(rows * .38));
+    const palette = boss
+      ? {A:'#39e7cf',B:'#1686b9',C:'#ffe66b',D:'#f7fff2'}
+      : butterfly
+        ? {A:'#ff4b58',B:'#a71946',C:'#55d8ff',D:'#fff0dc'}
+        : {A:'#35bfff',B:'#1762c8',C:'#ffe34f',D:'#fff7c2'};
+    const frames = boss
+      ? [
+        ['...A...A.','..AAA.AAA.','.AACCACCA.','AACCCACCCA','AABCCACBBA','.AABBBBAA.','..ABBBBA..','...A.A....','..A...A...'],
+        ['..A.....A.','..AAA.AAA.','.AACCACCA.','AACCCACCCA','AABCCACBBA','.AABBBBAA.','..ABBBBA..','...A.A....','..A...A...']
+      ]
+      : butterfly
+        ? [
+          ['A..A...A..','AA.AAA.AA..','.AAACCCAA.','..AACCCAA..','.AABDDDBAA.','AABBBBBBBA','..AABBBBA..','...A...A...','..A.....A..'],
+          ['..AA...AA..','A.AAAAA.A.','.AAACCCAA.','..AACCCAA..','.AABDDDBAA.','AABBBBBBBA','..AABBBBA..','...A...A...','..A.....A..']
+        ]
+        : [
+          ['..A.....A..','.AA.AAA.AA.','A.AACCCAA.A','..AACCCAA..','..AABDDDA..','.AABBBBBBA.','..AABBBBA..','...A...A...','..A.....A..'],
+          ['A.........A','.AA.AAA.AA.','A.AACCCAA.A','..AACCCAA..','..AABDDDA..','.AABBBBBBA.','..AABBBBA..','...A...A...','..A.....A..']
+        ];
+    const frame = frames[Math.floor(time * 5 + (b.seed || 0)) % 2];
+    const unit = size / 11, w = 11 * unit, h = 9 * unit;
+    ctx.save();
+    ctx.shadowColor = boss ? '#48ffe0' : butterfly ? '#ff526f' : '#42cfff';
+    ctx.shadowBlur = 5 + pulse * 5;
+    for(let y=0;y<frame.length;y++){
+      const line = frame[y].padEnd(11,'.');
+      for(let x=0;x<11;x++){
+        const ch=line[x];
+        if(ch==='.' || !palette[ch]) continue;
+        ctx.fillStyle=palette[ch];
+        ctx.fillRect(cx-w/2+x*unit,cy-h/2+y*unit,unit*.94,unit*.94);
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawDivers(){
+    for(const d of divers){
+      if(!d) continue;
+      const hw = d.w / 2, hh = d.h / 2;
+      if(d.phase === 'warn'){
+        // 锁定线：从敌机指向挡板当前位置
+        ctx.save();
+        ctx.globalAlpha = .35 + .35 * Math.abs(Math.sin(time * 14));
+        ctx.strokeStyle = '#ff7ab0'; ctx.lineWidth = 1.4; ctx.setLineDash([4, 6]);
+        ctx.beginPath(); ctx.moveTo(d.x, d.y + hh);
+        ctx.lineTo(d.targetX, paddle.y - 6); ctx.stroke();
+        ctx.setLineDash([]); ctx.restore();
+        continue;   // 砖本体仍由砖块循环画，只在这里加预警线
+      }
+      // 尾迹
+      for(let i = 0; i < d.trail.length; i++){
+        const q = d.trail[i], a = (i + 1) / d.trail.length;
+        ctx.fillStyle = 'rgba(255,120,180,' + (a * .22).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(q.x, q.y, hw * a * .9, 0, 6.283); ctx.fill();
+      }
+      ctx.save();
+      ctx.translate(d.x, d.y); ctx.rotate(d.rot);
+      // 尾焰
+      ctx.save();
+      ctx.globalAlpha = .55 + .3 * Math.sin(time * 22 + d.seed);
+      const flame = ctx.createLinearGradient(0, -hh, 0, -hh - 22);
+      flame.addColorStop(0, '#ffd08a'); flame.addColorStop(1, 'rgba(255,90,60,0)');
+      ctx.fillStyle = flame;
+      ctx.beginPath(); ctx.moveTo(-hw * .35, -hh); ctx.lineTo(hw * .35, -hh);
+      ctx.lineTo(0, -hh - 22); ctx.closePath(); ctx.fill();
+      ctx.restore();
+      // 与编队共用同一套 Galaga 精灵；按像素网格等比绘制，不再压扁成砖块长方形
+      const source = d.b || {};
+      const spriteSize = Math.max(d.w, d.h) * 1.35;
+      const pulse = .5 + .5 * Math.sin(time * 2.2 + (source.r || 0) * .8 + (source.c || 0) * .5 + (d.seed || 0));
+      drawGalagaSprite(source, 0, 0, spriteSize, pulse);
+      ctx.restore();
+    }
+  }
+
+  // 击碎一块砖：金砖加分、爆炸砖连锁波及周围 8 格（可继续引爆别的爆炸砖）
+  function shatter(seed, seedRect){
+    let gained = 0, blasts = 0;
+    const effects = [];
+    const q = [seed], seen = new Set();
+    let guard = 0;
+    while(q.length && guard++ < 80){
+      const b = q.shift();
+      if(!b || !b.alive || seen.has(b)) continue;
+      seen.add(b);
+      // 爆炸波及的硬砖只削一层，削穿才碎
+      if(b.type === 'tough' && b !== seed){
+        b.hp -= dmgScale; b.flash = 1;
+        if(b.hp > 0) continue;
+      }
+      const rect = (b === seed && seedRect) ? seedRect : brickRect(b);
+      if(b.dive){                       // 连锁炸掉正在俯冲的敌机，顺手撤销这次俯冲
+        const k = divers.indexOf(b.dive);
+        if(k >= 0) divers.splice(k, 1);
+        b.dive.retire();
+        b.dive = null;
+      }
+      b.retire();
+      const pal = brickPalette(b);
+      gained += 10 + (level - 1) * 2;
+      spawnParticles(rect.x + rect.w / 2, rect.y + rect.h / 2, pal.a, 7);
+      if(b.type === 'bonus'){
+        gained += 50;
+        floaters.push({x:rect.x + rect.w/2, y:rect.y, text:'+50', t:.85, life:.85, color:'#ffe38a', size:14});
+        if(isTrapLevel()){
+          addLives(1);
+          floaters.push({x:rect.x + rect.w/2, y:rect.y - 12, text:'+1 ♥', t:1, life:1, color:'#ffe38a', size:13});
+        }
+      }
+      if(b.type !== 'trap' && ['slow','multi','bleed','drunk','spin','half','gravity'].indexOf(b.type) >= 0)
+        effects.push({b, rect});
+      if(b.type === 'blast'){
+        blasts++;
+        waves.push({x:rect.x + rect.w/2, y:rect.y + rect.h/2, r0:5, max:Math.max(58, b.w * 1.9),
+                    t:.46, life:.46, color:'#ff9a5c'});
+        shake = Math.max(shake, 7);
+        for(const n of bricks){
+          if(n.alive && n !== b && Math.abs(n.r - b.r) <= 1 && Math.abs(n.c - b.c) <= 1) q.push(n);
+        }
+      }
+    }
+    addScore(gained);                 // 连锁一次性结算，补心阈值也照常生效
+    for(const e of effects) triggerEffect(e.b, e.rect);
+    if(blasts) beep(150 + Math.min(blasts, 5) * 35, .16, 'sawtooth', .05);
+    return blasts;
+  }
+  function colorOf(b){
+    if(level === 1 && levelType() === LT.CLASSIC){
+      const hue = 280 - (clamp(b.r, 0, Math.max(1, rows - 1)) / Math.max(1, rows - 1)) * 280;
+      return 'hsl(' + hue + ',90%,62%)';
+    }
+    return 'hsl(' + (196 + b.r / Math.max(1, rowCount) * 132) + ',88%,62%)';
+  }
+
+  /* ---------- 绘制 ---------- */
+  function roundRect(x, y, w, h, r){
+    r = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+    ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+    ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+    ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y);
+    ctx.closePath();
+  }
+  function draw(){
+    ctx.save();
+    if(shake > .1) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
+    // 背景：整屏铺满（多留 20px，震动时不露边）
+    const firstLevelCover = level === 1;
+    const g = ctx.createLinearGradient(0, 0, W * .3, H);
+    if(firstLevelCover){
+      g.addColorStop(0, '#100d32'); g.addColorStop(.42, '#17245a'); g.addColorStop(1, '#080b20');
+    } else {
+      g.addColorStop(0, '#080e20'); g.addColorStop(.55, '#0b1430'); g.addColorStop(1, '#0a0a1e');
+    }
+    ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
+    if(firstLevelCover){
+      const nebula = ctx.createRadialGradient(W*.5, topInset+area*.42, 8, W*.5, topInset+area*.42, W*.78);
+      nebula.addColorStop(0, 'rgba(130,90,255,.20)');
+      nebula.addColorStop(.48, 'rgba(60,125,255,.10)');
+      nebula.addColorStop(1, 'rgba(30,50,120,0)');
+      ctx.fillStyle = nebula; ctx.fillRect(0, 0, W, H);
+    }
+
+    const glow = ctx.createRadialGradient(paddle.x + paddle.w / 2, paddle.y, 10, paddle.x + paddle.w / 2, paddle.y, Math.max(W, H) * .62);
+    glow.addColorStop(0, 'rgba(80,130,255,.16)'); glow.addColorStop(1, 'rgba(80,130,255,0)');
+    ctx.fillStyle = glow; ctx.fillRect(0, 0, W, H);
+
+    // 缓慢流动网格 + 星点，填充球运动区
+    const grid = 46, off = (time * 9) % grid;
+    ctx.strokeStyle = firstLevelCover ? 'rgba(150,185,255,.025)' : 'rgba(130,170,255,.045)'; ctx.lineWidth = 1; ctx.beginPath();
+    for(let x = -grid + off; x < W + grid; x += grid){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+    for(let y = -grid + off * .55; y < H + grid; y += grid){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
+    ctx.stroke();
+    for(const s of stars){
+      const a = s.a * (.6 + .4 * Math.sin(time * s.s * .25 + s.p));
+      ctx.fillStyle = 'rgba(180,210,255,' + a.toFixed(3) + ')';
+      ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.283); ctx.fill();
+    }
+
+    if(firstLevelCover){
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.shadowColor = 'rgba(130,170,255,.7)';
+      ctx.shadowBlur = 16;
+      ctx.fillStyle = '#f4f0ff';
+      ctx.font = '800 ' + clamp(W*.062, 20, 27) + 'px system-ui,-apple-system,sans-serif';
+      ctx.fillText('RAINBOW ODYSSEY', W*.5, topInset+23);
+      ctx.shadowBlur = 7;
+      ctx.fillStyle = 'rgba(190,220,255,.9)';
+      ctx.font = '600 ' + clamp(W*.027, 10, 12) + 'px system-ui,-apple-system,sans-serif';
+      ctx.fillText('第一关 · 彩虹星河', W*.5, topInset+43);
+      const line = ctx.createLinearGradient(W*.22,0,W*.78,0);
+      line.addColorStop(0,'rgba(120,150,255,0)');
+      line.addColorStop(.5,'rgba(190,210,255,.65)');
+      line.addColorStop(1,'rgba(255,130,220,0)');
+      ctx.strokeStyle = line; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(W*.22,topInset+53); ctx.lineTo(W*.78,topInset+53); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 高速反馈不再扫过屏幕边缘：只在球附近增加柔和、稳定的暖色光晕。
+    const furyBg = clamp((liveMult() - 1) / (FURY_REF - 1), 0, 1);
+    if(furyBg > .2){
+      ctx.save();
+      const auraR = ball.r * (3.2 + furyBg * 2.4);
+      const aura = ctx.createRadialGradient(ball.x,ball.y,ball.r,ball.x,ball.y,auraR);
+      aura.addColorStop(0,'rgba(255,190,125,' + (.08 + furyBg*.10).toFixed(3) + ')');
+      aura.addColorStop(.55,'rgba(255,125,105,' + (.035 + furyBg*.045).toFixed(3) + ')');
+      aura.addColorStop(1,'rgba(255,100,130,0)');
+      ctx.fillStyle = aura;
+      ctx.fillRect(ball.x-auraR,ball.y-auraR,auraR*2,auraR*2);
+      ctx.restore();
+    }
+
+    // 弹珠台机关绘制。
+    if(isCurseLevel()){
+      for(const h of plinkoPockets){
+        ctx.save(); ctx.shadowColor='#ff4778'; ctx.shadowBlur=18;
+        const pg=ctx.createRadialGradient(h.x,h.y,2,h.x,h.y,h.r*1.5);
+        pg.addColorStop(0,'#020513'); pg.addColorStop(.68,'#10152e'); pg.addColorStop(1,'rgba(255,65,115,.18)');
+        ctx.fillStyle=pg; ctx.beginPath(); ctx.arc(h.x,h.y,h.r*1.35,0,6.283); ctx.fill();
+        ctx.strokeStyle='rgba(255,105,145,.85)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(h.x,h.y,h.r,0,6.283); ctx.stroke();
+        ctx.fillStyle='#ff9ab4'; ctx.font='700 9px system-ui'; ctx.textAlign='center'; ctx.fillText('−♥',h.x,h.y+3); ctx.restore();
+      }
+      for(const p of plinkoBumpers){
+        ctx.save(); ctx.shadowColor='#45dfff'; ctx.shadowBlur=20;
+        const bg=ctx.createRadialGradient(p.x-p.r*.3,p.y-p.r*.35,2,p.x,p.y,p.r);
+        bg.addColorStop(0,'#f4ffff'); bg.addColorStop(.35,'#7cf3ff'); bg.addColorStop(1,'#2474c8');
+        ctx.fillStyle=bg; ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,6.283); ctx.fill();
+        ctx.strokeStyle='rgba(220,255,255,.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(p.x,p.y,p.r*.58,0,6.283); ctx.stroke(); ctx.restore();
+      }
+      ctx.save(); ctx.fillStyle='#9fefff'; ctx.font='700 12px system-ui'; ctx.textAlign='center';
+      ctx.fillText('目标砖 '+bricks.filter(b => b.alive).length+' 块 · 清空通关',W/2,topInset+25); ctx.restore();
+    }
+
+    // 第三关双层铁墙：上墙两个固定缺口，下墙通道持续左右匀速移动。
+    if(isFortressLevel()){
+      const walls = fortressWallYs();
+      const drawWall = (y, openings, moving) => {
+        ctx.save(); ctx.lineCap='round'; ctx.lineWidth=7;
+        ctx.shadowColor=moving?'#ffbd72':'#63dfff'; ctx.shadowBlur=12;
+        ctx.strokeStyle='rgba(105,145,205,.9)';
+        ctx.beginPath(); ctx.moveTo(3,y); ctx.lineTo(W-3,y); ctx.stroke();
+        const halfOpening = moving ? W*.14 : W*.055;
+        ctx.globalCompositeOperation='destination-out';
+        for(const x of openings){
+          ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x,y);
+          ctx.lineWidth=halfOpening*2; ctx.stroke();
+        }
+        ctx.globalCompositeOperation='source-over';
+        ctx.strokeStyle=moving?'#ffc477':'#8cecff'; ctx.lineWidth=2;
+        for(const x of openings){
+          for(const side of [-1,1]){
+            ctx.beginPath(); ctx.moveTo(x+side*halfOpening,y-5);
+            ctx.lineTo(x+side*halfOpening,y+5); ctx.stroke();
+          }
+        }
+        ctx.restore();
+      };
+      drawWall(walls.upper,[W*.33,W*.67],false);
+      drawWall(walls.lower,[fortressGateX],true);
+      ctx.save(); ctx.fillStyle='#9fefff'; ctx.font='700 10px system-ui'; ctx.textAlign='center';
+      ctx.fillText('固定双缺口',W*.5,walls.upper-10);
+      ctx.fillStyle='#ffd49a'; ctx.fillText('移动通道  ⇆',fortressGateX,walls.lower-12); ctx.restore();
+    }
+
+
+    // 球区分界线 + 缓慢上移的流光，长屏下半部也有层次
+    const zoneTop = topInset + area, zoneH = Math.max(60, paddle.y - zoneTop);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(130,180,255,.12)'; ctx.lineWidth = 1; ctx.setLineDash([3, 9]);
+    ctx.beginPath(); ctx.moveTo(0, zoneTop + 12); ctx.lineTo(W, zoneTop + 12); ctx.stroke();
+    ctx.setLineDash([]);
+    const bandY = zoneTop + 30 + ((time * 26) % Math.max(1, zoneH - 60));
+    const band = ctx.createLinearGradient(0, bandY - 70, 0, bandY + 70);
+    band.addColorStop(0, 'rgba(90,150,255,0)');
+    band.addColorStop(.5, 'rgba(90,150,255,.06)');
+    band.addColorStop(1, 'rgba(90,150,255,0)');
+    ctx.fillStyle = band; ctx.fillRect(0, bandY - 70, W, 140);
+    ctx.restore();
+
+    // Galaga 风格敌机：原创像素精灵，按编队行数区分 Boss、蝴蝶与蜜蜂
+
+
+    // 砖块：每种类型有自己的图案，整体还会轻微呼吸发光
+    for(const b of bricks){
+      if(!b.alive) continue;
+      if(b.dive && b.dive.phase !== 'warn') continue;   // 离队俯冲的由 drawDivers 画
+      const q = brickRect(b);
+      ctx.save();
+      ctx.translate(q.x - b.x, q.y - b.y);       // 编队摆动 / 俯冲位移，内部绘制代码不用改
+      if(b.respawn > 0) ctx.globalAlpha = 1 - b.respawn / .65 * .72;
+      const pal = brickPalette(b);
+      const pulse = .5 + .5 * Math.sin(time * 2.2 + b.r * .8 + b.c * .5 + b.seed);
+      const cx = b.x + b.w / 2, cy = b.y + b.h / 2, s = Math.min(b.w, b.h);
+      if(isDiveLevel() && b.type === 'normal'){
+        drawGalagaSprite(b, cx, cy, s * .94, pulse);
+      } else {
+        ctx.save();
+        ctx.shadowColor = pal.glow;
+        ctx.shadowBlur = 6 + pulse * 5 + (b.type === 'blast' ? 7 * pulse : 0);
+        const bg = ctx.createLinearGradient(b.x, b.y, b.x + b.w * .4, b.y + b.h);
+        bg.addColorStop(0, pal.a); bg.addColorStop(1, pal.b);
+        ctx.fillStyle = bg;
+        roundRect(b.x, b.y, b.w, b.h, Math.min(5, b.h * .22)); ctx.fill();
+        ctx.restore();
+        // 顶部高光 + 底部暗边，让砖块有厚度
+        const hh = Math.max(2, b.h * .16);
+        ctx.fillStyle = 'rgba(255,255,255,.26)';
+        roundRect(b.x + 2, b.y + 2, b.w - 4, hh, 2); ctx.fill();
+        ctx.fillStyle = 'rgba(0,0,0,.16)';
+        roundRect(b.x + 2, b.y + b.h - hh - 1, b.w - 4, hh, 2); ctx.fill();
+        if(level === 1){
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,255,255,.52)';
+          ctx.lineWidth = .9;
+          roundRect(b.x + .7, b.y + .7, b.w - 1.4, b.h - 1.4, Math.min(5,b.h*.3));
+          ctx.stroke();
+          ctx.restore();
+        }
+      }
+
+      if(b.type === 'bonus'){                     // 旋转的四角星
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(time * 1.2 + b.seed);
+        ctx.fillStyle = 'rgba(255,255,255,.94)';
+        ctx.shadowColor = '#fff2b0'; ctx.shadowBlur = 8;
+        const R = s * .3, ri = s * .11;
+        ctx.beginPath();
+        for(let k = 0; k < 8; k++){
+          const a = k * Math.PI / 4, rr = k % 2 === 0 ? R : ri;
+          k ? ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr)
+            : ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+        }
+        ctx.closePath(); ctx.fill(); ctx.restore();
+      } else if(b.type === 'blast'){             // 同心圆 + 准星，脉冲放大
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,240,220,.9)'; ctx.lineWidth = 1.4;
+        ctx.shadowColor = '#ff8a4c'; ctx.shadowBlur = 6;
+        const rr = s * (.19 + .05 * pulse);
+        ctx.beginPath(); ctx.arc(cx, cy, rr, 0, 6.283); ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, rr * .48, 0, 6.283); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx - s * .3, cy); ctx.lineTo(cx + s * .3, cy);
+        ctx.moveTo(cx, cy - s * .3); ctx.lineTo(cx, cy + s * .3);
+        ctx.stroke(); ctx.restore();
+      } else if(b.type === 'tough'){             // 双层描边 + 裂纹（打过一次更深）
+        ctx.save();
+        ctx.strokeStyle = b.hp > 1 ? 'rgba(255,255,255,.62)' : 'rgba(24,38,76,.78)';
+        ctx.lineWidth = b.hp > 1 ? 1.4 : 2;
+        roundRect(b.x + 2.5, b.y + 2.5, b.w - 5, b.h - 5, 4); ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(b.x + b.w * .28, b.y + 2);
+        ctx.lineTo(b.x + b.w * .46, b.y + b.h * .5);
+        ctx.lineTo(b.x + b.w * .32, b.y + b.h - 2);
+        ctx.moveTo(b.x + b.w * .70, b.y + 2);
+        ctx.lineTo(b.x + b.w * .58, b.y + b.h * .52);
+        ctx.lineTo(b.x + b.w * .74, b.y + b.h - 2);
+        ctx.stroke(); ctx.restore();
+      } else if(b.type === 'slow'){             // 六向雪花，缓慢自转
+        ctx.save();
+        ctx.translate(cx, cy); ctx.rotate(time * .5 + b.seed);
+        ctx.strokeStyle = 'rgba(240,255,252,.95)'; ctx.lineWidth = 1.5;
+        ctx.lineCap = 'round'; ctx.shadowColor = '#8ff2dd'; ctx.shadowBlur = 7;
+        const R = s * .3;
+        for(let k = 0; k < 3; k++){
+          const a = k * Math.PI / 3;
+          ctx.beginPath();
+          ctx.moveTo(-Math.cos(a) * R, -Math.sin(a) * R);
+          ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke();
+          for(const sg of [-1, 1]){
+            const bx = Math.cos(a) * R * .62 * sg, by = Math.sin(a) * R * .62 * sg;
+            ctx.beginPath(); ctx.moveTo(bx, by);
+            ctx.lineTo(bx - Math.cos(a - .7) * R * .28, by - Math.sin(a - .7) * R * .28);
+            ctx.moveTo(bx, by);
+            ctx.lineTo(bx - Math.cos(a + .7) * R * .28, by - Math.sin(a + .7) * R * .28);
+            ctx.stroke();
+          }
+        }
+        ctx.restore();
+      } else if(b.type === 'multi'){            // 品字三球，轻微跳动
+        ctx.save();
+        ctx.fillStyle = 'rgba(248,235,255,.95)';
+        ctx.shadowColor = '#dcb0ff'; ctx.shadowBlur = 8;
+        const rr = s * .105, hop = Math.sin(time * 3 + b.seed) * s * .045;
+        const pts = [[0, -s * .17 + hop], [-s * .19, s * .16], [s * .19, s * .16]];
+        for(const q of pts){
+          ctx.beginPath(); ctx.arc(cx + q[0], cy + q[1], rr, 0, 6.283); ctx.fill();
+        }
+        ctx.restore();
+      } else if(b.type === 'trap'){             // 叉 + 环：踩中直接丢主球
+        ctx.save(); ctx.strokeStyle='rgba(255,235,240,.95)'; ctx.lineWidth=2;
+        ctx.shadowColor='#ff5c78'; ctx.shadowBlur=8;
+        ctx.beginPath(); ctx.arc(cx,cy,s*.27,0,6.283); ctx.stroke();
+        const d=s*.15;
+        ctx.beginPath(); ctx.moveTo(cx-d,cy-d); ctx.lineTo(cx+d,cy+d);
+        ctx.moveTo(cx+d,cy-d); ctx.lineTo(cx-d,cy+d); ctx.stroke(); ctx.restore();
+      } else if(b.type === 'bleed'){            // 血滴：开启持续失血倒计时
+        ctx.save(); ctx.fillStyle='rgba(255,230,220,.95)';
+        ctx.shadowColor='#ff7a52'; ctx.shadowBlur=8;
+        ctx.beginPath(); ctx.moveTo(cx,cy-s*.3);
+        ctx.bezierCurveTo(cx+s*.24,cy-s*.02,cx+s*.18,cy+s*.28,cx,cy+s*.28);
+        ctx.bezierCurveTo(cx-s*.18,cy+s*.28,cx-s*.24,cy-s*.02,cx,cy-s*.3);
+        ctx.fill(); ctx.restore();
+      } else if(b.type === 'drunk'){            // 歪扭波浪：挡板打滑
+        ctx.save(); ctx.strokeStyle='rgba(245,225,255,.95)'; ctx.lineWidth=1.8;
+        ctx.shadowColor='#c48cff'; ctx.shadowBlur=7;
+        for(let k=0;k<2;k++){ ctx.beginPath();
+          for(let i=0;i<=12;i++){ const xx=cx-s*.3+i*s*.05;
+            const yy=cy+(k?1:-1)*s*.1+Math.sin(i*.8+time*4+b.seed)*s*.07;
+            i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); }
+          ctx.stroke(); }
+        ctx.restore();
+      } else if(b.type === 'spin'){             // 螺旋：球路缓慢旋转
+        ctx.save(); ctx.strokeStyle='rgba(225,245,255,.95)'; ctx.lineWidth=1.7;
+        ctx.shadowColor='#6cc8ff'; ctx.shadowBlur=7; ctx.beginPath();
+        for(let i=0;i<=28;i++){ const a=i*.42+time*2+b.seed, rr=s*.3*i/28;
+          const xx=cx+Math.cos(a)*rr, yy=cy+Math.sin(a)*rr;
+          i?ctx.lineTo(xx,yy):ctx.moveTo(xx,yy); }
+        ctx.stroke(); ctx.restore();
+      } else if(b.type === 'half'){             // 半实心：伤害永久减半
+        ctx.save(); ctx.fillStyle='rgba(235,235,248,.92)';
+        ctx.shadowColor='#9a9ab8'; ctx.shadowBlur=6;
+        ctx.fillRect(cx-s*.26,cy-s*.26,s*.26,s*.52);
+        ctx.strokeStyle='rgba(235,235,248,.92)'; ctx.lineWidth=1.6;
+        ctx.strokeRect(cx-s*.26,cy-s*.26,s*.52,s*.52); ctx.restore();
+      } else if(b.type === 'gravity'){          // 向下箭头：额外重力
+        ctx.save(); ctx.strokeStyle='rgba(255,240,210,.95)'; ctx.lineWidth=2;
+        ctx.shadowColor='#ffb954'; ctx.shadowBlur=7;
+        ctx.beginPath(); ctx.moveTo(cx,cy-s*.3); ctx.lineTo(cx,cy+s*.22);
+        ctx.moveTo(cx-s*.16,cy+s*.06); ctx.lineTo(cx,cy+s*.26);
+        ctx.lineTo(cx+s*.16,cy+s*.06); ctx.stroke(); ctx.restore();
+      }
+      if(isSnakeLevel() && snake){
+        if(b.snakeIdx === 0){                 // 蛇头：两只眼睛
+          ctx.save(); ctx.shadowColor='#8ff2a8'; ctx.shadowBlur=8;
+          ctx.fillStyle='rgba(255,255,255,.96)';
+          for(const dx of [-.13,.13]){ ctx.beginPath(); ctx.arc(cx+dx*s,cy-s*.05,s*.075,0,6.283); ctx.fill(); }
+          ctx.fillStyle='#0b2a18';
+          for(const dx of [-.13,.13]){ ctx.beginPath(); ctx.arc(cx+dx*s,cy-s*.05,s*.032,0,6.283); ctx.fill(); }
+          ctx.restore();
+        }
+
+      }
+      if(b.flash > 0){                          // 被击中的白闪
+        ctx.fillStyle = 'rgba(255,255,255,' + (b.flash * .55).toFixed(3) + ')';
+        roundRect(b.x, b.y, b.w, b.h, Math.min(5, b.h * .22)); ctx.fill();
+      }
+      if(b.dive && b.dive.phase === 'warn'){   // 起飞前闪红，提示「它锁定你了」
+        ctx.save();
+        ctx.globalAlpha = .45 + .5 * Math.abs(Math.sin(time * 14));
+        ctx.strokeStyle = '#ff6ba8'; ctx.lineWidth = 2;
+        ctx.shadowColor = '#ff6ba8'; ctx.shadowBlur = 10;
+        roundRect(b.x - 2, b.y - 2, b.w + 4, b.h + 4, 6); ctx.stroke();
+        ctx.restore();
+      }
+      ctx.restore();
+    }
+
+    if(isDiveLevel()) drawDivers();            // 离队俯冲的敌机、锁定线、尾焰
+    if(isSnakeLevel()){ drawSnakeFood(); drawSnakeRockets(); } // 贪吃蛇食物与穿身火箭
+
+    // Auto 的瞄准：反向传播算出的目标砖 + 从接球点指向它的虚线
+    if(autoPilot && state === 'playing' && aimPlan && aimPlan.brick && aimPlan.brick.alive){
+      const b = aimPlan.brick, q = brickRect(b), tt = (aimPlan.rel + 1) / 2;
+      ctx.save();
+      ctx.globalAlpha = .3 + .12 * Math.sin(time * 4);
+      ctx.strokeStyle = '#9ff8d4'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 7]);
+      ctx.beginPath();
+      ctx.moveTo(paddle.x + tt * paddle.w, surfaceY(tt) - 3);
+      ctx.lineTo(q.x + q.w / 2, q.y + q.h);
+      ctx.stroke(); ctx.setLineDash([]);
+      ctx.globalAlpha = .65 + .3 * Math.sin(time * 4);
+      ctx.shadowColor = '#8ff2c8'; ctx.shadowBlur = 10;
+      ctx.strokeStyle = '#b6ffe0'; ctx.lineWidth = 2;
+      roundRect(q.x - 3, q.y - 3, q.w + 6, q.h + 6, 6); ctx.stroke();
+      ctx.restore();
+    }
+
+    // 球越快越「烧」：拖尾、球体、辉光一起从冰蓝渐变到橙红
+    const fury = clamp((liveMult() - 1) / (FURY_REF - 1), 0, 1);
+    const tr = Math.round(140 + 115 * fury), tg = Math.round(225 - 105 * fury), tb = Math.round(255 - 185 * fury);
+    const hotRGB = tr + ',' + tg + ',' + tb;
+    // 球拖尾：相邻帧之间按距离补点，极速下也是一条连续光带而非散珠
+    for(let i = 0; i < trail.length; i++){
+      const t = trail[i], a = (i + 1) / trail.length;
+      const rad = ball.r * a * (.85 + .25 * fury);
+      const nxt = trail[i + 1];
+      const segs = nxt ? Math.min(10, Math.ceil(Math.hypot(nxt.x - t.x, nxt.y - t.y) / 7)) : 0;
+      for(let k = 0; k <= segs; k++){
+        const u = segs ? k / segs : 0;
+        const x = nxt ? t.x + (nxt.x - t.x) * u : t.x;
+        const y = nxt ? t.y + (nxt.y - t.y) * u : t.y;
+        const aa = nxt ? a + u / trail.length : a;
+        ctx.fillStyle = 'rgba(' + hotRGB + ',' + (aa * (.28 + .22 * fury)).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(x, y, Math.max(1, rad * (nxt ? .6 + .4 * u : 1)), 0, 6.283); ctx.fill();
+      }
+    }
+    // 球：多球时主球略放大并加一圈淡金光环，一眼认出「哪颗掉了才扣血」
+    // 只改绘制尺寸，物理半径 ball.r 不变，避免碰撞口径不一致
+    const mainDraw = extraBalls.length ? ball.r * 1.18 : ball.r;
+    if(extraBalls.length){
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,226,150,.8)'; ctx.lineWidth = 1.6;
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw + 5 + Math.sin(time * 4) * 1.5, 0, 6.283); ctx.stroke();
+      ctx.setLineDash([]); ctx.restore();
+    }
+    ctx.save();
+    ctx.shadowColor = 'rgb(' + hotRGB + ')'; ctx.shadowBlur = 18 + 16 * fury;
+    const bg2 = ctx.createRadialGradient(ball.x - ball.r * .35, ball.y - ball.r * .4, .5, ball.x, ball.y, mainDraw);
+    bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, 'rgb(' + hotRGB + ')');
+    ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
+    ctx.restore();
+
+    // 多球砖分裂出的额外球：紫色短拖尾，和主球一眼可区分
+    for(const e of extraBalls){
+      for(let i = 0; i < e.trail.length; i++){
+        const q = e.trail[i], a = (i + 1) / e.trail.length;
+        ctx.fillStyle = 'rgba(205,145,255,' + (a * .3).toFixed(3) + ')';
+        ctx.beginPath(); ctx.arc(q.x, q.y, e.r * a * .8, 0, 6.283); ctx.fill();
+      }
+      ctx.save();
+      ctx.shadowColor = '#cf92ff'; ctx.shadowBlur = 14;
+      const eg = ctx.createRadialGradient(e.x - e.r * .3, e.y - e.r * .35, .5, e.x, e.y, e.r);
+      eg.addColorStop(0, '#ffffff'); eg.addColorStop(1, '#c07cf0');
+      ctx.fillStyle = eg; ctx.beginPath(); ctx.arc(e.x, e.y, e.r, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+
+    drawFalling();   // 落砖关：自由落体的砖块
+
+    // 挡板：三种形状共用同一套渐变与发光
+    const px = paddle.x, pw = paddle.w, bottom = paddle.y + paddle.h, pcx = px + pw / 2;
+    const h = shapeBodyH();
+    const topY = shape === 'rect' ? paddle.y : bottom - h;
+    ctx.save();
+    ctx.shadowColor = '#7cc4ff'; ctx.shadowBlur = 16;
+    const pg = ctx.createLinearGradient(0, topY, 0, bottom);
+    pg.addColorStop(0, '#d8f4ff'); pg.addColorStop(.45, '#79c8ff'); pg.addColorStop(1, '#4b6ede');
+    ctx.fillStyle = pg;
+    ctx.beginPath();
+    if(shape === 'triangle'){                 // 标准等边：底边 pw，高 √3/2·pw，三边等长
+      ctx.moveTo(pcx, topY); ctx.lineTo(px + pw, bottom); ctx.lineTo(px, bottom); ctx.closePath();
+    } else if(shape === 'semicircle'){        // 标准半圆：圆心在底边中点，半径 pw/2
+      ctx.moveTo(px, bottom);
+      ctx.arc(pcx, bottom, SEMI_R(), Math.PI, 2 * Math.PI);
+      ctx.closePath();
+    } else if(shape === 'moon'){              // 新月：外缘向下鼓起，内缘形成朝上的 U 形接球槽
+      ctx.moveTo(px, topY);
+      ctx.quadraticCurveTo(pcx, bottom + h, px + pw, topY);
+      ctx.quadraticCurveTo(pcx, bottom + .44 * h, px, topY);
+      ctx.closePath();
+    } else {
+      roundRect(px, paddle.y, pw, paddle.h, paddle.h / 2);
+    }
+    ctx.fill();
+    ctx.restore();
+    // 轮廓高光
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.42)'; ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+    if(shape === 'rect'){
+      ctx.fillStyle = 'rgba(255,255,255,.55)';
+      roundRect(px + pw * .3, paddle.y + 2, pw * .4, 2, 1); ctx.fill();
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,.6)';
+      ctx.beginPath(); ctx.arc(pcx, topY + 3, 2.2, 0, 6.283); ctx.fill();
+    }
+    if(autoPilot){
+      ctx.save();
+      ctx.globalAlpha = .5 + .18 * Math.sin(time * 2.6);
+      ctx.fillStyle = '#7ff0c0';
+      ctx.font = '700 9px system-ui,sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('AUTO', pcx, Math.min(H - 12, bottom + 5));
+      ctx.restore();
+    }
+
+    // 粒子
+    for(const p of particles){
+      ctx.globalAlpha = clamp(p.life * 2.2, 0, 1);
+      ctx.fillStyle = p.color; ctx.fillRect(p.x, p.y, p.s, p.s);
+    }
+    ctx.globalAlpha = 1;
+
+    // 爆炸冲击波
+    for(const w of waves){
+      const k = 1 - w.t / w.life;
+      ctx.save();
+      ctx.globalAlpha = clamp(w.t / w.life, 0, 1) * .85;
+      ctx.strokeStyle = w.color; ctx.lineWidth = 2 + k * 3;
+      ctx.shadowColor = w.color; ctx.shadowBlur = 14;
+      ctx.beginPath(); ctx.arc(w.x, w.y, w.r0 + k * w.max, 0, 6.283); ctx.stroke();
+      ctx.restore();
+    }
+    // 加分 / 新砖种飘字
+    for(const f of floaters){
+      const k = clamp(f.t / f.life, 0, 1), y = f.y - (1 - k) * 22;
+      ctx.save();
+      ctx.globalAlpha = Math.min(1, k * 2.2);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '700 ' + f.size + 'px system-ui,sans-serif';
+      if(f.hint){
+        const tw = ctx.measureText(f.text).width;
+        ctx.fillStyle = 'rgba(8,14,32,.84)';
+        roundRect(f.x - tw/2 - 12, y - f.size/2 - 7, tw + 24, f.size + 14, 11);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(150,190,255,.3)'; ctx.lineWidth = 1; ctx.stroke();
+      }
+      ctx.fillStyle = f.color; ctx.shadowColor = f.color; ctx.shadowBlur = 12;
+      ctx.fillText(f.text, f.x, y);
+      ctx.restore();
+    }
+
+    // 接球方向指示：一道短箭头，直观看到挡板把球「打歪」了多少
+    if(hitFx){
+      const k = clamp(hitFx.t / .38, 0, 1);
+      const len = 32 + (1 - k) * 26;
+      const hy = hitFx.y - ball.r;
+      const dx = Math.sin(hitFx.ang) * len, dy = -Math.abs(Math.cos(hitFx.ang)) * len;
+      const col = Math.abs(hitFx.ang) > .55 ? '#ffd27f' : '#8ee6ff';
+      ctx.save();
+      ctx.globalAlpha = k;
+      ctx.strokeStyle = col; ctx.fillStyle = col;
+      ctx.lineWidth = 2.5; ctx.lineCap = 'round';
+      ctx.shadowColor = col; ctx.shadowBlur = 12;
+      ctx.beginPath(); ctx.moveTo(hitFx.x, hy); ctx.lineTo(hitFx.x + dx, hy + dy); ctx.stroke();
+      const a = Math.atan2(dy, dx), ah = 8;
+      ctx.beginPath();
+      ctx.moveTo(hitFx.x + dx, hy + dy);
+      ctx.lineTo(hitFx.x + dx - ah * Math.cos(a - .5), hy + dy - ah * Math.sin(a - .5));
+      ctx.moveTo(hitFx.x + dx, hy + dy);
+      ctx.lineTo(hitFx.x + dx - ah * Math.cos(a + .5), hy + dy - ah * Math.sin(a + .5));
+      ctx.stroke();
+      ctx.fillStyle = '#fff';
+      ctx.beginPath(); ctx.arc(hitFx.x, hy, 1 + 3 * k, 0, 6.283); ctx.fill();
+      ctx.restore();
+    }
+
+    // 事件提示（画布内文字，不是弹窗）
+    if(toast){
+      ctx.save();
+      ctx.globalAlpha = clamp(toast.t, 0, 1);
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = '700 ' + Math.round(clamp(W * .05, 16, 23)) + 'px system-ui,sans-serif';
+      ctx.fillStyle = '#bfe6ff'; ctx.shadowColor = '#3d7fff'; ctx.shadowBlur = 14;
+      ctx.fillText(toast.text, W / 2, H * .63);
+      ctx.restore();
+    }
+
+    // 待发球：只在球上画一圈呼吸光，不用任何文字或窗口
+    if(state === 'serving'){
+      ctx.save();
+      const pulse = Math.sin(time * 3.2);
+      ctx.strokeStyle = 'rgba(140,225,255,' + (.16 + .1 * (pulse * .5 + .5)).toFixed(3) + ')';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.arc(ball.x, ball.y, ball.r + 7 + pulse * 2.5, 0, 6.283); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore();   // 结束震动位移
+  }
+
+  // 游戏主循环：计算帧间隔，更新游戏状态、绘制画面，再请求下一帧。
+  function loop(t){
+    // 横屏时冻结物理模拟；遮罩提示用户转回竖屏，不让棋盘被横向视口重新排版。
+    if(window.matchMedia && window.matchMedia('(orientation: landscape)').matches){
+      last = t;
+      requestAnimationFrame(loop);
+      return;
+    }
+    const dt = Math.min((t - last) / 1000 || 0, .033);
+    last = t;
+    update(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  resize();
+  newLevel(false);
+  last = performance.now();
+  requestAnimationFrame(loop);
+  setTimeout(scheduleResize, 100);
+})();
+</script>
+</body>
+</html>

@@ -76,16 +76,16 @@ function harness() {
 }
 
 
-test('all production script blocks parse as JavaScript', () => {
-  const blocks = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/gi)];
-  assert.ok(blocks.length>0, 'expected the single-file game script');
-  for (const block of blocks) new vm.Script(block[1]);
+test('main production script parses as JavaScript', () => {
+  const start = html.indexOf('<script>'), end = html.lastIndexOf('</script>');
+  assert.ok(start>=0 && end>start, 'expected the game script block');
+  new vm.Script(html.slice(start+8,end));
 });
 
 test('ring ball still spawns and launches from the inner cavity floor', () => {
-  assert.match(html,/ball\.y=cy\+ringInnerRadius\(Math\.PI\/2\)-ball\.r-2/);
-  assert.match(html,/ball\.y=cy\+ringInnerRadius\(Math\.PI\/2\)-ball\.r-1/);
-  assert.match(html,/顶部缺口/);
+  assert.ok(html.includes('ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;'));
+  assert.ok(html.includes('ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-1;'));
+  assert.ok(html.includes('顶部缺口'));
 });
 
 test('speed classes cover crawl, slow, cruise, fast and extreme', () => {

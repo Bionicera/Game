@@ -625,7 +625,7 @@
 
   // 状态推进只控制挡板目标位置；球仍由真实内壁碰撞和缺口端碰撞驱动。
   function updateRingSling(dt,focus){
-    if(shape!=='ring'||levelType()!==1||!autoPilot||state!=='playing'||!focus){
+    if(shape!=='ring'||levelType()!==1||!autoPilot||state!=='playing'||!focus||!ringSensor.valid){
       if(ringSling.phase!=='idle'){
         const lastCycles=ringSling.lastCycles||0;
         ringSling={phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,

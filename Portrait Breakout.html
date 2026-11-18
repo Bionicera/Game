@@ -14,7 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>打砖块 · 竖屏版</title>
+<title>彩虹星河 · Rainbow Galaxy</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#070b18;
@@ -1306,7 +1306,7 @@
     if(level === 1 && levelType() === LT.CLASSIC){
       const alive = bricks.filter(b => b && b.alive);
       const bandCount = Math.max(1, rows);
-      const thetaMax = .86;
+      const thetaMax = 1.05;
       const baseY = topInset + area * .96;
       const outerRy = area * .76;
       const ryStep = bandCount > 1 ? area * .50 / (bandCount - 1) : 0;
@@ -1333,7 +1333,7 @@
           b.layoutSpanX = 1; b.layoutSpanY = 1;
           b.w = brickSide; b.h = brickSide;
           b.x = W * .5 + rx * Math.sin(theta) - brickSide / 2;
-          b.y = baseY - ry * Math.cos(theta) - brickSide / 2;
+          b.y = baseY - ry * Math.cos(theta) - brickSide / 2 + brickSide;
         });
       }
       for(const b of bricks) if(!b.alive) b.layoutVisible = false;
@@ -2921,7 +2921,7 @@
       ctx.shadowBlur = 16;
       ctx.fillStyle = '#f4f0ff';
       ctx.font = '800 ' + clamp(W*.062, 20, 27) + 'px system-ui,-apple-system,sans-serif';
-      ctx.fillText('RAINBOW ODYSSEY', W*.5, topInset+23);
+      ctx.fillText('RAINBOW GALAXY', W*.5, topInset+23);
       ctx.shadowBlur = 7;
       ctx.fillStyle = 'rgba(190,220,255,.9)';
       ctx.font = '600 ' + clamp(W*.027, 10, 12) + 'px system-ui,-apple-system,sans-serif';

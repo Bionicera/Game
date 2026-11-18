@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'ringContact'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -43,6 +43,9 @@ function harness() {
     shape: 'ring',
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
+    hitFx: null,
+    ringMoodEvent: () => {}, ringMoodRandom: () => .5, beep: () => {},
+    bouncePaddle: (o, y, isMain, n) => { const dot=o.vx*n.x+o.vy*n.y; if(dot<0){o.vx-=2*dot*n.x;o.vy-=2*dot*n.y;} },
     baseSpeed: () => 300,
     ringSensor: {
       valid: false, speed: 0, speedRatio: 0, speedClass: 'stopped', acceleration: 0,
@@ -68,7 +71,7 @@ function harness() {
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
       updateRingSensor,updateRingState,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,
-      get sensor(){return ringSensor},get state(){return ringState},
+      get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
@@ -209,6 +212,31 @@ test('ring-specific controller is gated away from other paddle shapes', () => {
   const s = h.updateRingSensor(.016,{x:200,y:400,vx:0,vy:100,r:8});
   assert.equal(s.valid,false);
   assert.equal(h.updateRingState(s,.016,{}).valid,false);
+});
+
+
+test('inner wall soft contact dissipates speed while retaining a valid response', () => {
+  const h = harness(), p=h.paddle, R=p.w*.47, cy=p.y+p.h-R, ri=h.ringInnerRadius(0);
+  const o={x:p.x+p.w/2+ri-8+.5,y:cy,vx:300,vy:50,r:8};
+  const before=Math.hypot(o.vx,o.vy);
+  assert.equal(h.ringContact(o,o.x-2,o.y,true,p.x,p.x),true);
+  assert.ok(Math.hypot(o.vx,o.vy)<before*.6,'inner wall should strongly dissipate normal energy');
+  assert.ok(Number.isFinite(o.x)&&Number.isFinite(o.y)&&Number.isFinite(o.vx)&&Number.isFinite(o.vy));
+});
+
+test('outer wall reflects and applies the bounded 1.045 speed gain', () => {
+  const h = harness(), p=h.paddle, R=p.w*.47, cy=p.y+p.h-R;
+  const o={x:p.x+p.w/2+R+8-.5,y:cy,vx:-300,vy:50,r:8};
+  const before=Math.hypot(o.vx,o.vy);
+  assert.equal(h.ringContact(o,o.x+2,o.y,true,p.x,p.x),true);
+  assert.ok(o.vx>0,'outer wall should reflect horizontal motion');
+  assert.ok(Math.abs(Math.hypot(o.vx,o.vy)/before-1.045)<1e-6);
+});
+
+test('open top gap remains a pass-through and is not treated as a collision wall', () => {
+  const h = harness(), p=h.paddle, R=p.w*.47, cy=p.y+p.h-R;
+  const o={x:p.x+p.w/2,y:cy-R-1,vx:0,vy:-220,r:8};
+  assert.equal(h.ringContact(o,o.x,o.y+2,true,p.x,p.x),false);
 });
 
 test('production physics retains soft inner wall and accelerated outer wall', () => {

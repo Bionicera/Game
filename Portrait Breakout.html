@@ -532,6 +532,16 @@
   const RING_R = () => paddle.w * .47;
   const RING_GAP_HALF = () => Math.asin(clamp((Math.max(1, ball.r * 3)) / RING_R(), 0, .92));
   const RING_WALL = () => Math.max(5, Math.min(paddle.h * .72, RING_R() * .22));
+  // 内环不是完美圆：三组不同频率、不同相位的浅起伏，避免左右镜像与周期性共振。
+  // 起伏幅度保持克制，先从约 4% 半径以内开始，后续根据实测手感迭代。
+  function ringInnerRadius(a){
+    const R=RING_R(), base=R-RING_WALL();
+    return base + R*(.026*Math.sin(3*a+.42)+.014*Math.sin(5*a-1.13)+.009*Math.sin(2*a+2.07));
+  }
+  function ringInnerRadiusSlope(a){
+    const R=RING_R();
+    return R*(.078*Math.cos(3*a+.42)+.070*Math.cos(5*a-1.13)+.018*Math.cos(2*a+2.07));
+  }
   function shapeBodyH(){
     if(shape === 'triangle') return TRI_H();
     if(shape === 'semicircle') return SEMI_R();
@@ -688,15 +698,11 @@
     return true;
   }
 
-  // 开口圆环：内外圆弧都参与连续扫掠碰撞，顶部缺口保持真正开放。
+  // 开口圆环：外壁保持圆形硬壁，内壁使用非对称柔和起伏；顶部缺口始终开放。
   function ringContact(o, prevX, prevY, isMain, paddleStartX, paddleEndX){
-    const pw=paddle.w, bottom=paddle.y+paddle.h, R=RING_R(), inner=R-RING_WALL();
+    const pw=paddle.w, bottom=paddle.y+paddle.h, R=RING_R();
     const gap=RING_GAP_HALF(), start=-Math.PI/2+gap, end=3*Math.PI/2-gap;
     const center={x:pw/2,y:bottom-R};
-    // 内环两侧设置略微错位的圆润导向凸点，打破高速左右往返的对称轨迹。
-    const bumpers=[{a:32,r:Math.max(4.5,ball.r*.88)},{a:148,r:Math.max(4.5,ball.r*.76)}]
-      .map(b=>({...b,cx:center.x+Math.cos(b.a*Math.PI/180)*(inner-b.r*.46),
-                       cy:center.y+Math.sin(b.a*Math.PI/180)*(inner-b.r*.46)}));
     const arcHit=(x,y,r,kind)=>{
       const dx=x-center.x,dy=y-center.y,ang=Math.atan2(dy,dx);
       let a=ang;
@@ -708,10 +714,27 @@
       const ox=x-q.x,oy=y-q.y;
       return {q,n,dist:Math.hypot(ox,oy),signed:ox*n.x+oy*n.y,kind};
     };
-    const bumpHit=(x,y,b)=>{
-      const dx=x-b.cx,dy=y-b.cy,d=Math.hypot(dx,dy)||1,n={x:dx/d,y:dy/d};
-      const q={x:b.cx+n.x*b.r,y:b.cy+n.y*b.r},ox=x-q.x,oy=y-q.y;
-      return {q,n,dist:Math.hypot(ox,oy),signed:ox*n.x+oy*n.y,kind:'bump'};
+    // 对起伏内壁求最近点；法线由曲线切线计算，碰撞与绘制共用同一轮廓。
+    const innerHit=(x,y)=>{
+      const point=a=>{
+        const rr=ringInnerRadius(a),dr=ringInnerRadiusSlope(a),ca=Math.cos(a),sa=Math.sin(a);
+        const q={x:center.x+rr*ca,y:center.y+rr*sa};
+        const tx=dr*ca-rr*sa,ty=dr*sa+rr*ca,tl=Math.hypot(tx,ty)||1;
+        let nx=-ty/tl,ny=tx/tl;
+        if(nx*ca+ny*sa>0){nx=-nx;ny=-ny;}
+        return {q,n:{x:nx,y:ny}};
+      };
+      const dist2=a=>{const p=point(a),dx=x-p.q.x,dy=y-p.q.y;return dx*dx+dy*dy;};
+      const count=48,step=(end-start)/count;
+      let best=0,bestD=Infinity;
+      for(let i=0;i<=count;i++){const a=start+step*i,d=dist2(a);if(d<bestD){bestD=d;best=i;}}
+      let lo=Math.max(start,start+step*(best-1)),hi=Math.min(end,start+step*(best+1));
+      for(let i=0;i<14;i++){
+        const a=lo+(hi-lo)/3,b=hi-(hi-lo)/3;
+        if(dist2(a)<dist2(b))hi=b;else lo=a;
+      }
+      const p=point((lo+hi)/2),ox=x-p.q.x,oy=y-p.q.y;
+      return {...p,dist:Math.hypot(ox,oy),signed:ox*p.n.x+oy*p.n.y,kind:'inner'};
     };
     const travel=Math.hypot((o.x-prevX)-(paddleEndX-paddleStartX),o.y-prevY);
     const steps=clamp(Math.ceil(travel/Math.max(1,o.r*.4)),1,256);
@@ -719,18 +742,21 @@
     for(let k=0;k<=steps;k++){
       const f=k/steps,px=paddleStartX+(paddleEndX-paddleStartX)*f;
       const cx=prevX+(o.x-prevX)*f-px,cy=prevY+(o.y-prevY)*f;
-      const hits=[arcHit(cx,cy,R,'outer'),arcHit(cx,cy,inner,'inner'),...bumpers.map(b=>bumpHit(cx,cy,b))];
+      const hits=[arcHit(cx,cy,R,'outer'),innerHit(cx,cy)];
       for(const hit of hits){
         const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y<-.01;
-        if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching&&(!contact||hit.dist<contact.dist)) contact={...hit,f};
+        if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching&&(!contact||hit.dist<contact.dist))contact={...hit,f};
       }
-      if(contact) break;
+      if(contact)break;
     }
     if(!contact)return false;
     const px=paddleStartX+(paddleEndX-paddleStartX)*contact.f;
     o.x=px+contact.q.x+contact.n.x*(o.r+.6);
     o.y=contact.q.y+contact.n.y*(o.r+.6);
     bouncePaddle(o,contact.q.y,isMain,contact.n,clamp((contact.q.x-pw/2)/(pw/2),-1,1));
+    // 内壁柔化耗散，外壁给予轻微增速；幅度先保守设置，避免球速突变。
+    const wallGain=contact.kind==='inner'?.975:1.025;
+    o.vx*=wallGain;o.vy*=wallGain;
     return true;
   }
 
@@ -3587,11 +3613,13 @@
       ctx.quadraticCurveTo(pcx, bottom + .44 * h, px, topY);
       ctx.closePath();
     } else if(shape === 'ring'){
-      const R=RING_R(),ri=R-RING_WALL(),gap=RING_GAP_HALF();
+      const R=RING_R(),gap=RING_GAP_HALF();
       const cy=bottom-R,start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
       ctx.arc(pcx,cy,R,start,end,false);
-      ctx.lineTo(pcx+ri*Math.cos(end),cy+ri*Math.sin(end));
-      ctx.arc(pcx,cy,ri,end,start,true);
+      for(let i=64;i>=0;i--){
+        const a=start+(end-start)*i/64,ri=ringInnerRadius(a);
+        ctx.lineTo(pcx+ri*Math.cos(a),cy+ri*Math.sin(a));
+      }
       ctx.closePath();
     } else {
       roundRect(px, paddle.y, pw, paddle.h, paddle.h / 2);
@@ -3608,18 +3636,14 @@
       roundRect(px + pw * .3, paddle.y + 2, pw * .4, 2, 1); ctx.fill();
     } else if(shape === 'ring'){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,.72)'; ctx.lineWidth=1.5;
-      ctx.beginPath(); const R=RING_R(),ri=R-RING_WALL(),cy=bottom-R,gap=RING_GAP_HALF();
-      ctx.arc(pcx,cy,ri,-Math.PI/2+gap,3*Math.PI/2-gap,false); ctx.stroke();
-      // 两枚浅蓝圆润凸点与碰撞体同位，右侧略大、左侧略低，视觉上易于辨认。
-      const brs=[{a:32,r:Math.max(4.5,ball.r*.88)},{a:148,r:Math.max(4.5,ball.r*.76)}];
-      for(const b of brs){
-        const bx=pcx+Math.cos(b.a*Math.PI/180)*(ri-b.r*.46);
-        const by=cy+Math.sin(b.a*Math.PI/180)*(ri-b.r*.46);
-        ctx.fillStyle='rgba(178,231,255,.96)'; ctx.shadowColor='#8bd8ff'; ctx.shadowBlur=7;
-        ctx.beginPath(); ctx.arc(bx,by,b.r,0,Math.PI*2); ctx.fill();
-        ctx.shadowBlur=0; ctx.strokeStyle='rgba(255,255,255,.82)'; ctx.lineWidth=1;
-        ctx.stroke();
+      ctx.beginPath();
+      const cy=bottom-RING_R(),gap=RING_GAP_HALF(),a0=-Math.PI/2+gap,a1=3*Math.PI/2-gap;
+      for(let i=0;i<=96;i++){
+        const a=a0+(a1-a0)*i/96,ri=ringInnerRadius(a);
+        if(i===0)ctx.moveTo(pcx+ri*Math.cos(a),cy+ri*Math.sin(a));
+        else ctx.lineTo(pcx+ri*Math.cos(a),cy+ri*Math.sin(a));
       }
+      ctx.stroke();
       ctx.restore();
     } else {
       ctx.fillStyle = 'rgba(255,255,255,.6)';

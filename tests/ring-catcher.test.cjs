@@ -310,9 +310,11 @@ test('sling releases only at the opposite real gap tip; short-dash length contro
 test('sling aborts cleanly when Auto is disabled or the focus ball changes', () => {
   const h=harness();h.auto=true;
   const a={x:200,y:420,vx:100,vy:0,r:8},b={x:210,y:420,vx:100,vy:0,r:8};
+  h.sensor.valid=true;
   h.beginRingSling(a);
   h.updateRingSling(.016,b);
   assert.equal(h.sling.phase,'idle');
+  h.sensor.valid=true;
   h.beginRingSling(a);
   h.auto=false;
   h.updateRingSling(.016,a);
@@ -414,6 +416,7 @@ test('RingPlanner changes are evaluated once per transition and reset on mode lo
 test('sling has bounded phase timeouts and aborts instead of hanging', () => {
   const h=harness();h.auto=true;
   const o={x:200,y:420,vx:60,vy:0,r:8};
+  h.sensor.valid=true;
   h.beginRingSling(o);
   h.updateRingSling(3.3,o);
   assert.equal(h.sling.phase,'cooldown');
@@ -540,6 +543,7 @@ test('emergency safe-catch plan overrides an active sling sequence', () => {
     gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'inside'};
   const plan=h.planRingSkill(sensor,{intent:'aim'},focus);
   assert.equal(plan.skill,'safe-catch');
+  h.sensor.valid=true;
   h.planner.skill='safe-catch';
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'cooldown');
@@ -668,6 +672,7 @@ test('sling aborts cleanly when Auto is disabled or the game is paused', () => {
   const h=harness();h.auto=true;
   const focus={x:200,y:420,vx:100,vy:0,r:8};
   assert.equal(h.beginRingSling(focus),true);
+  h.sensor.valid=true;
   h.auto=false;
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'idle');
@@ -732,4 +737,15 @@ test('RingSensor and trajectory predictor reject overflowed derived radial veloc
   const predicted=h.predictRingTrajectory(extreme,1.5);
   assert.equal(predicted.valid,false);
   assert.equal(predicted.simulatedTime,0);
+});
+ 
+test('active sling aborts immediately when RingSensor becomes invalid', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h.beginRingSling(focus),true);
+  h.sling.phase='oscillate';
+  h.sensor.valid=false;
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'idle');
+  assert.equal(h.sling.focus,null);
 });

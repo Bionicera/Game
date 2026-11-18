@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
         evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
     },
     startLiveAuto(){
-      shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';
+      shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';lives=99;
       const R=RING_R(),cy=paddle.y+paddle.h-R;
       ball.x=paddle.x+paddle.w/2;ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;
       ball.vx=140;ball.vy=-260;ringState.intent='aim';beep=()=>{};syncUI();
@@ -122,18 +122,29 @@ const { chromium } = require('playwright');
     const livePage=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
     const liveErrors=[];
     livePage.on('pageerror',e=>liveErrors.push(e.message));
+    livePage.on('console',m=>{if(m.type()==='error')liveErrors.push('console: '+m.text());});
     await livePage.setContent(html,{waitUntil:'load'});
     await livePage.waitForFunction(()=>document.querySelector('#cover')?.classList.contains('dismissed'),null,{timeout:5000});
     await livePage.evaluate(()=>window.__ringTest.startLiveAuto());
-    await livePage.waitForTimeout(4500);
+    await livePage.waitForTimeout(30000);
     const live=await livePage.evaluate(()=>window.__ringTest.snapshot());
     for(const key of ['x','y','vx','vy'])assert.ok(Number.isFinite(live.ball[key]),'live Auto ball '+key+' must stay finite');
     assert.equal(live.shape,'ring');
     assert.equal(live.autoPilot,true);
     assert.equal(live.sensor.valid,true,'live RingSensor should stay active during browser play');
     assert.ok(live.evaluator.events.length<=48,'live evaluator history must remain bounded');
-    assert.deepEqual(liveErrors,[],'live browser play should have no uncaught page errors');
-    process.stdout.write('Browser smoke passed: Canvas startup, planner matrix, full sling sequence, and 4.5s live Ring Auto simulation.\\n');
+    assert.ok(live.time>=28,'real-time Auto scenario should advance for at least 28 seconds');
+    assert.ok(live.lives>=90,'stress run must not silently restart due to ordinary life depletion');
+    assert.ok(['idle','cooldown','oscillate','dash','release'].includes(live.sling.phase),'sling must remain in a recognized bounded phase');
+    assert.ok(live.sling.phaseTime===undefined||live.sling.phaseTime<=3.21,'no sling phase may exceed its timeout');
+    await livePage.locator('#btnPause').click();
+    assert.equal(await livePage.evaluate(()=>window.__ringTest.snapshot().state),'paused','pause must remain responsive after long Auto');
+    await livePage.locator('#btnPause').click();
+    assert.ok(['playing','serving'].includes(await livePage.evaluate(()=>window.__ringTest.snapshot().state)),'resume must restore a live game state');
+    await livePage.locator('#btnReset').click();
+    assert.equal(await livePage.evaluate(()=>window.__ringTest.snapshot().state),'serving','restart must return to the serving state');
+    assert.deepEqual(liveErrors,[],'long browser Auto play should have no console or uncaught page errors');
+    process.stdout.write('Browser smoke passed: Canvas startup, planner matrix, full sling sequence, and 30s live Ring Auto stress with pause/resume/restart.\\n');
   } finally {
     await browser.close();
   }

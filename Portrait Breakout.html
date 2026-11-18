@@ -80,12 +80,6 @@
   .cover-spark{position:absolute;color:#fff2c9;text-shadow:0 0 12px #fff,0 0 25px #a8c9ff;font-size:19px}
   .cover-spark.a{top:16%;left:17%}.cover-spark.b{right:14%;top:30%;font-size:14px}.cover-spark.c{bottom:19%;left:22%;font-size:12px}
   .cover-bottom{display:flex;flex-direction:column;align-items:center;gap:15px;width:100%}
-  .cover-tagline{font-size:12px;letter-spacing:.22em;color:#d5d9ef}
-  #btnEnter{min-width:190px;padding:14px 34px;border:1px solid rgba(255,235,202,.78);border-radius:999px;
-    color:#fff8e9;background:linear-gradient(120deg,rgba(116,147,218,.28),rgba(199,131,190,.24));
-    box-shadow:0 0 22px rgba(143,170,255,.22),inset 0 1px rgba(255,255,255,.22);
-    font-size:13px;font-weight:650;letter-spacing:.28em;cursor:pointer;backdrop-filter:blur(10px)}
-  #btnEnter:active{transform:scale(.97);background:rgba(178,177,255,.3)}
   .cover-footnote{font-size:9px;letter-spacing:.2em;color:rgba(196,207,232,.55)}
   @media(max-height:650px){.cover-poster{padding-top:12px;padding-bottom:10px}.cover-art{height:210px}
     .cover-title{margin-top:10px}.cover-rule{margin-top:13px}.cover-bricks{gap:5px}}
@@ -186,8 +180,6 @@
         <div class="cover-ball"></div><div class="cover-paddle"></div>
       </div>
       <div class="cover-bottom">
-        <div class="cover-tagline">RAINBOW GALAXY · LEVEL 01</div>
-        <button id="btnEnter" type="button">开始游戏</button>
         <div class="cover-footnote">MADE TO PLAY · MADE OF STARS</div>
       </div>
     </div>
@@ -3550,7 +3542,6 @@
   }
 
   const cover = $('cover');
-  const enterButton = $('btnEnter');
   function enterGame(){
     if(!cover || cover.classList.contains('dismissed')) return;
     cover.classList.add('dismissed');
@@ -3558,12 +3549,7 @@
     firstLevelIntroT = 4.8;
     setTimeout(() => { if(cover && cover.parentNode) cover.style.display = 'none'; }, 700);
   }
-  enterButton.addEventListener('click', enterGame);
-  document.addEventListener('keydown', e => {
-    if(cover && !cover.classList.contains('dismissed') && (e.key === 'Enter' || e.key === ' ')){
-      e.preventDefault(); enterGame();
-    }
-  });
+  setTimeout(enterGame, 2000);
 
   resize();
   newLevel(false);

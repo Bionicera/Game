@@ -290,7 +290,8 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 |---|---|---|---|---|
 | 2026-11-18 | 文档建立 | 建立长期施工总账、分层架构、阶段验收与回归边界 | 文档已提交 | 完成 |
 | 2026-11-18 | 阶段 1 · 迭代 1 | 新增只读 RingSensor：速度等级/加速度趋势/方向/径向位置/内外壁净距/缺口预测/径向碰撞 ETA；Auto 速度分支读取传感器倍率 | JavaScript 语法检查通过；静态确认传感器无球体位置/速度写入；尚未浏览器及手机实测 | 代码完成，场景验收待进行 |
-| 2026-11-18 | 阶段 1.5 · 迭代 1 | 新增 RingState：速度/趋势分类、内外壁意图、缺口通过意图、接触窗口优先级、策略滞回与多球焦点隔离；Auto 瞄准模式读取 RingState | Node.js 与 Chromium 回归覆盖 | 完成第一轮 |\n| 2026-11-18 | 阶段 2-5 · 第一轮集成 | RingSkills、事件驱动 RingCombo、RingPlanner、RingEvaluator、首事件轨迹预测、多球焦点一致性、特殊关卡隔离 | 51 项 Node.js 测试与 Chromium 真实碰撞/实时 Auto smoke | 代码完成，待本轮 CI 最终确认 |
+| 2026-11-18 | 阶段 1.5 · 迭代 1 | 新增 RingState：速度/趋势分类、内外壁意图、缺口通过意图、接触窗口优先级、策略滞回与多球焦点隔离；Auto 瞄准模式读取 RingState | Node.js 与 Chromium 回归覆盖 | 完成第一轮 |
+| 2026-11-18 | 阶段 2-5 · 第一轮集成 | RingSkills、事件驱动 RingCombo、RingPlanner、RingEvaluator、首事件轨迹预测、多球焦点一致性、特殊关卡隔离 | 52 项 Node.js 测试与 Chromium 真实碰撞/4.5 秒实时 Auto smoke；历史 CI run 44253947061 两个 Job 成功 | 第一轮集成完成；不代表后续稳健性提交已通过 CI |
 
 ## 每次施工必须填写的监工记录模板
 
@@ -323,8 +324,8 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 
 ## 当前状态
 
-**当前焦点：RingSensor → RingState → RingPlanner → RingSkills → RingPhysics → RingEvaluator 第一轮已集成；最新已确认 CI 为 52/52 Node 测试通过，Chromium Canvas / Planner / 甩球动作链 / 4.5 秒实时 Auto smoke 通过。**  
-这不是手机实测，也不是长时间压力测试。当前正在增加非有限球状态防护和极端速度预测预算测试；新增回归结果以最新 Actions 运行记录为准。
+**当前焦点：圆环捕手已完成第一轮集成，正在进行传感器失效恢复、数值溢出隔离和长时 Chromium Auto 压力回归。**  
+已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 60 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
 
 
 ### 2026-11-18 · 稳健性加固 · 非有限物理输入与极端预测
@@ -339,3 +340,19 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 已知问题：Chromium live Auto 目前为 4.5 秒短时场景；后续仍需扩展多分钟模拟、帧时抖动、窗口失焦/恢复及更多边界场景。
 - 下一步：继续扩大浏览器物理压力测试与自动驾驶中断/恢复测试，不把短时 smoke 误报为完整验收。
 - Commit：`45233fa1899119a1ab5de0a5b47260071c059cfe`（传感器输入防护）；`8847ba2fbb691145270d93f36b0557a49766e49d`（新增回归）；`b72db00ccaea1b91089d21751682617375743c08`（测试夹具修正）。
+
+
+### 2026-11-18 · 稳健性加固 · 失效恢复、数值溢出与长时浏览器回归
+- 目标：避免失效焦点或溢出派生量污染传感器/规划器；避免无效传感器下甩球动作继续执行；将浏览器 Auto 检查从短 smoke 扩展为长时生命周期场景。
+- 根因/观察：传感器在缺失焦点或非法输入时原先可能保留 gap/trajectory 等旧观测；有限原始输入也可能在径向点积中溢出；预测器可被直接传入非法球状态；甩球执行器原先只检查 Auto/形状/游戏状态，不检查本帧 RingSensor 是否有效。
+- 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`、`tests/ring-browser-smoke.cjs`。
+- 生产行为变化：集中清理 RingSensor 的历史速度、ETA、缺口预测、轨迹事件与几何派生字段；传感器和轨迹预测拒绝非法/溢出的径向速度计算；动能代理值封顶；RingSling 在传感器失效时立即回到 idle，不继续旧动作。
+- 测试变化：Node 测试文件当前定义 60 项测试，新增预测器非法输入、缺失焦点旧观测清理、派生径向速度溢出、失效传感器中断甩球等覆盖；浏览器 smoke 扩展到 30 秒实时 Auto，并检查球状态、传感器、技能阶段时限、控制台错误及暂停/恢复/重开。
+- 未触碰的系统：封面、音乐、HUD、关卡生成、其他四种挡板、内外壁物理常数、缺口几何与发布配置。
+- 单元测试：尚未在本执行环境运行；当前 GitHub Actions 执行结果待核验，不将测试数量写成通过数量。
+- Chromium 场景：30 秒长时场景及生命周期检查已写入测试脚本，尚待 CI 实际执行；历史 4.5 秒 smoke 不替代该结果。
+- CI run：待确认。GitHub 连接器当前可读取提交与历史已知 run 的 Job，但未提供 main push workflow run 列表；最新 run ID/Job 结论不得臆测。
+- 手机实测：未测试，按用户要求留到开发侧全部验收后。
+- 已知问题：需要取得本轮 Node/Chromium CI 结果并按真实失败日志继续修复；30 秒 Chromium 场景仍不等于真实手机后台恢复/触控/刷新率测试。
+- 下一步：核验本轮 Actions；若通过，继续扩展焦点切换、暂停帧、帧时抖动与技能目标不可达场景；若失败，按日志修复后重跑。
+- Commit：生产代码 `e62932b6`, `41485bda`, `90690588`, `909c89cd`；Node 测试 `410a17c1`, `a0088334`, `ef5bb3f0`, `0dc337d2`；Chromium 测试 `f573b46c`, `f1e54b9b`, `f6fad82d`。

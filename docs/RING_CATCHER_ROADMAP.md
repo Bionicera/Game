@@ -325,7 +325,7 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 ## 当前状态
 
 **当前焦点：圆环捕手已完成第一轮集成，正在进行传感器失效恢复、数值溢出隔离和长时 Chromium Auto 压力回归。**  
-已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 66 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
+已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 68 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
 
 
 ### 2026-11-18 · 稳健性加固 · 非有限物理输入与极端预测
@@ -364,8 +364,22 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 改动文件：`tests/ring-catcher.test.cjs`。
 - 新增测试：活动甩球时切换焦点球必须回到 idle 并记录取消；单帧超过震荡阶段时限必须进入 cooldown，且不能在同一大帧跳过 0.45 秒安全冷却；Planner 提出 safe-catch 时必须立即中断甩球并进入 cooldown。
 - 生产代码：本次未修改，针对现有 `updateRingSling` 的既有保护逻辑增加生产函数回归。
-- 静态/单元/浏览器验证：提交已写入 main；本次新增的 3 项测试尚未取得可核验的 Actions 结果，不能记为通过。当前总数为 66 项测试定义。
+- 静态/单元/浏览器验证：提交已写入 main；本次新增的 3 项测试尚未取得可核验的 Actions 结果，不能记为通过。当前总数为 68 项测试定义。
 - 手机实测：未测试。
 - 已知问题：GitHub 连接器目前可核验提交与 combined status，但本轮相关提交未返回可见 status checks；需通过 Actions 页面确认对应 Node 与 Browser job 的实际运行结果。
 - 下一步：继续补齐 Auto 关闭、暂停恢复、失焦恢复和帧时抖动的浏览器生命周期验证；优先取得本轮 Node/Chromium CI 结果后再宣告测试通过。
 - Commit：`dc3d5f28f6c7064c26b0c7512e2a724334181d76`。
+
+
+### 2026-11-18 · 甩球技能交接故障修复 · 捕捉后意图丢失
+- 用户反馈：圆环捕手接住球后经常没有继续执行甩球，表现为技能链遗忘。
+- 根因：真实内环碰撞后的甩球启动被错误地限制为 `ringState.intent==='aim'`。但 RingState 会按球速和趋势动态输出 `boost`、`control`、`unload`、`guide-through` 等意图；这些状态下即使已经发生有效内环捕捉，也不会启动甩球。这与“内环接球后接入甩球技能”的设计不一致。
+- 生产修复：新增 `beginRingSlingOnCapture`，将甩球启动绑定到真实主球内环碰撞，而不再依赖瞬时意图标签；仍保留 Auto、圆环、第一关、游戏进行中、非生存接球、技能 idle 等安全门控。冷却中不会重复启动或重置技能。
+- 仲裁时序修复：每帧先更新 RingPlanner 的当前安全优先级，再推进 RingSling，避免甩球执行器读取上一帧过期的 safe-catch 状态。
+- 回归测试：覆盖 boost/control/aim/guide-through 四种意图下真实内环碰撞均能启动甩球；另覆盖 safe-catch 抑制启动及冷却不被覆盖。当前 Node 测试定义总数：68。
+- 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`。
+- 验证状态：生产代码与回归测试已提交 main；GitHub Actions 由 main push 自动触发，尚未取得本次提交的可核验 job 结果，不把测试定义数当作通过数。
+- 手机实测：未测试。
+- 下一步：核验本次 Node/Chromium Actions；继续测试从真实捕捉到震荡、短冲、刀锋端释放的完整自动链，以及不同球速/目标方向下的释放成功率。
+- 生产代码 Commit：`f7b4a6fb6fafccbdfc07e562def9403f52070669`。
+- 测试 Commit：`80e7d3ead8eacd31c68f6a05606a54ef3996cc2a`。

@@ -535,7 +535,9 @@
   // 一个瞄准坐标，两种决策模型：球体能通过有效缺口时捕捉，否则由外环攻击壁接球。
   const ringAimOffset = rel => clamp(rel, -.92, .92) * RING_R();
   function ringAimMode(rel,r){
-    const clearHalf=Math.max(0,RING_R()*Math.sin(RING_GAP_HALF())-(r||ball.r));
+    // 通道按最窄的内环口计算，并扣除球半径与少量数值余量，避免擦边误判为可通过。
+    const throat=RING_R()-RING_WALL();
+    const clearHalf=Math.max(0,throat*Math.sin(RING_GAP_HALF())-(r||ball.r)-.75);
     return Math.abs(ringAimOffset(rel))<=clearHalf?'capture':'attack';
   }
   function ringAimContactY(rel,r){

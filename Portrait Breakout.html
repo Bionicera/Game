@@ -726,7 +726,11 @@
   // 有界的只读轨迹预测：以固定圆环几何模拟屏幕反射、内软壁、外硬壁与逻辑缺口。
   // 仅用于传感器/规划器；不写回传入球体，也不触发音效、粒子或全局随机数。
   function predictRingTrajectory(o,maxTime){
-    if(shape!=='ring'||!o)return {valid:false,etaInner:null,etaOuter:null,gapEta:null,gapPredictedX:null,gapPassable:false,events:[]};
+    const invalid=()=>({valid:false,etaInner:null,etaOuter:null,gapEta:null,gapPredictedX:null,
+      gapOffset:null,gapHalfClearance:0,gapPassable:false,events:[],simulatedTime:0});
+    const finiteVelocity=v=>v===undefined||v===null||Number.isFinite(v);
+    if(shape!=='ring'||!o||!Number.isFinite(o.x)||!Number.isFinite(o.y)||
+       !Number.isFinite(o.r)||o.r<=0||!finiteVelocity(o.vx)||!finiteVelocity(o.vy))return invalid();
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
     const horizon=clamp(Number.isFinite(maxTime)?maxTime:1.5,.08,2.4);
     const speed=Math.hypot(o.vx||0,o.vy||0),dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/1000,1/60);
@@ -788,10 +792,14 @@
   // 这是观测模型，不是物理模拟；预测值仅供决策参考，真实碰撞仍由 ringContact 负责。
   function updateRingSensor(dt,o){
     if(shape!=='ring'||!o){
-      if(shape!=='ring'){
-        ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;ringSensor.acceleration=0;
-        ringSensor.speed=0;ringSensor.speedRatio=0;ringSensor.speedClass='stopped';
-      }
+      ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;
+      ringSensor.acceleration=0;ringSensor.speed=0;ringSensor.speedRatio=0;
+      ringSensor.speedClass='stopped';ringSensor.speedTrend='stable';
+      ringSensor.nextWall=null;ringSensor.etaInner=null;ringSensor.etaOuter=null;
+      ringSensor.gapEta=null;ringSensor.gapPredictedX=null;ringSensor.gapOffset=null;
+      ringSensor.gapPassable=false;ringSensor.trajectoryEvents=[];ringSensor.trajectoryTime=0;
+      ringSensor.innerClearance=null;ringSensor.outerClearance=null;ringSensor.radialDistance=null;
+      ringSensor.radialVelocity=0;ringSensor.kineticIndex=0;
       return ringSensor;
     }
     // 感知入口先做数值隔离：NaN/Infinity 不得进入状态机、ETA 或挡板目标。
@@ -802,7 +810,10 @@
       ringSensor.acceleration=0;ringSensor.speed=0;ringSensor.speedRatio=0;
       ringSensor.speedClass='stopped';ringSensor.speedTrend='stable';
       ringSensor.nextWall=null;ringSensor.etaInner=null;ringSensor.etaOuter=null;
-      ringSensor.gapEta=null;ringSensor.gapPassable=false;
+      ringSensor.gapEta=null;ringSensor.gapPredictedX=null;ringSensor.gapOffset=null;
+      ringSensor.gapPassable=false;ringSensor.trajectoryEvents=[];ringSensor.trajectoryTime=0;
+      ringSensor.innerClearance=null;ringSensor.outerClearance=null;ringSensor.radialDistance=null;
+      ringSensor.radialVelocity=0;ringSensor.kineticIndex=0;
       return ringSensor;
     }
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;

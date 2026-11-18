@@ -118,7 +118,7 @@ test('ring state maps extreme/high speed to capture and low speed to boost', () 
   assert.equal(h.updateRingState(sensor,0,focus).mode, 'capture');
   assert.equal(h.state.intent, 'unload');
   sensor.speedRatio=.5; sensor.speedClass='slow';
-  assert.equal(h.updateRingState(sensor,0,focus).mode, 'attack');
+  assert.equal(h.updateRingState(sensor,.3,focus).mode, 'attack');
   assert.equal(h.state.intent, 'boost');
 });
 
@@ -127,7 +127,7 @@ test('ring state responds to acceleration trend, deceleration and gap guidance',
   const sensor = {valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'accelerating',acceleration:80,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
   assert.equal(h.updateRingState(sensor,0,focus).mode,'capture');
   sensor.speedTrend='decelerating';
-  assert.equal(h.updateRingState(sensor,0,focus).mode,'attack');
+  assert.equal(h.updateRingState(sensor,.3,focus).mode,'attack');
   sensor.gapEta=.1;sensor.gapPassable=true;
   h.updateRingState(sensor,0,focus);
   assert.equal(h.state.intent,'guide-through');

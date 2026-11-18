@@ -343,7 +343,9 @@ test('production ringContact starts sling on inner capture and releases at the r
   assert.equal(h.sling.phase,'oscillate','real inner-wall contact should begin the skill for the Auto main ball');
 
   h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;h.sling.cyclesTarget=2;
-  const releaseBall={x:p.x+qx+nx*7.5,y:qy+ny*7.5,vx:-nx*220,vy:-ny*220,r:8};
+  const releaseBall=captured;
+  releaseBall.x=p.x+qx+nx*7.5;releaseBall.y=qy+ny*7.5;
+  releaseBall.vx=-nx*220;releaseBall.vy=-ny*220;
   assert.equal(h.ringContact(releaseBall,releaseBall.x,releaseBall.y,true,p.x,p.x),true);
   assert.ok(releaseBall.vx>0&&releaseBall.vy<0,'the actual production collision should fling through the right-side gap tip');
   assert.equal(h.sling.phase,'cooldown');
@@ -441,4 +443,16 @@ test('ring skill evaluator only retains the latest 48 records', () => {
   for(let i=0;i<100;i++)h.recordRingEvaluation('request',{skill:'guide'});
   assert.equal(h.evaluator.events.length,48);
   assert.equal(h.evaluator.requested,100);
+});
+
+
+test('sling release rejects a different ball after focus lock', () => {
+  const h=harness();h.auto=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8},other={x:200,y:420,vx:100,vy:0,r:8};
+  h.beginRingSling(focus);
+  h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;
+  const R=94,cx=100,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+  const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
+  assert.equal(h.tryReleaseRingSling(other,contact,true),false);
+  assert.equal(h.tryReleaseRingSling(focus,contact,true),true);
 });

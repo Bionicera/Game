@@ -248,8 +248,8 @@ test('production physics retains soft inner wall and accelerated outer wall', ()
   const ringContact = extractFunction('ringContact');
   assert.match(ringContact,/softNormal=-vn\*\.28/);
   assert.match(ringContact,/softTangent=vt\*\.94/);
-  assert.match(ringContact,/speedCap=baseSpeed\\(\\)\\*1\\.72/);
-  assert.match(ringContact,/Math\\.min\\(1\\.045,speedCap\\/afterReflect\\)/);
+  assert.ok(ringContact.includes('speedCap=baseSpeed()*1.72'));
+  assert.ok(ringContact.includes('Math.min(1.045,speedCap/afterReflect)'));
 });
 
 

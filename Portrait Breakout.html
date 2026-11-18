@@ -601,7 +601,7 @@
 
   // 甩球的预备方向由攻击目标决定；圆环向目标反方向短冲，最终从反侧缺口端出球。
   function beginRingSling(o){
-    if(shape!=='ring'||!autoPilot||state!=='playing'||!o||ringSling.phase!=='idle')return false;
+    if(shape!=='ring'||levelType()!==1||!autoPilot||state!=='playing'||!o||ringSling.phase!=='idle')return false;
     const center=paddle.x+paddle.w/2;
     const targetX=aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:o.x+o.vx*.35;
     const exitSide=Math.sign(targetX-center)||Math.sign(o.vx)||1;
@@ -625,7 +625,7 @@
 
   // 状态推进只控制挡板目标位置；球仍由真实内壁碰撞和缺口端碰撞驱动。
   function updateRingSling(dt,focus){
-    if(shape!=='ring'||!autoPilot||state!=='playing'||!focus){
+    if(shape!=='ring'||levelType()!==1||!autoPilot||state!=='playing'||!focus){
       if(ringSling.phase!=='idle'){
         const lastCycles=ringSling.lastCycles||0;
         ringSling={phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
@@ -1827,9 +1827,9 @@
     // 多球时采用带滞回的优先球锁定，避免两颗球 ETA 接近时挡板反复换目标。
     const focus = selectAutoFocusBall();
     const r = focus.r;
-    if(shape==='ring'&&ringSling.phase!=='idle'&&ringSling.focus===focus&&ringPlanner.skill!=='safe-catch')
+    if(shape==='ring'&&levelType()===1&&ringSling.phase!=='idle'&&ringSling.focus===focus&&ringPlanner.skill!=='safe-catch')
       return clamp(ringSling.targetX,2,W-paddle.w-2);
-    if(shape==='ring'&&ringPlanner.focus===focus&&['safe-catch','gap-guide','capture','guide'].includes(ringPlanner.skill)&&Number.isFinite(ringPlanner.targetX))
+    if(shape==='ring'&&levelType()===1&&ringPlanner.focus===focus&&['safe-catch','gap-guide','capture','guide'].includes(ringPlanner.skill)&&Number.isFinite(ringPlanner.targetX))
       return clamp(ringPlanner.targetX,2,W-paddle.w-2);
     // 弹珠台有弹力柱与扣命球袋，使用关卡专用前向模拟；不启用未经机关验证的攻击反推。
     if(isCurseLevel()){
@@ -2795,10 +2795,12 @@
   function update(dt){
     time += dt;
     if(shape==='ring'){
-      const sensed=updateRingSensor(dt,ball);
-      updateRingState(sensed,dt,ball);
-      updateRingSling(dt,ball);
-      updateRingPlanner(dt,ball);
+      // Sensor / State / Planner / Skills 锁定同一个 Auto 焦点球，避免多球时感知主球却追踪辅球。
+      const ringFocus=autoPilot?selectAutoFocusBall():ball;
+      const sensed=updateRingSensor(dt,ringFocus);
+      updateRingState(sensed,dt,ringFocus);
+      updateRingSling(dt,ringFocus);
+      updateRingPlanner(dt,ringFocus);
     }else{
       updateRingSensor(0,null);
       ringState.valid=false;ringState.hold=0;

@@ -863,7 +863,7 @@ test('RingSling cancels a dash whose clamped target has no forward travel', () =
   const focus={x:200,y:420,vx:100,vy:0,r:8};
   h.sling.phase='oscillate';h.sling.focus=focus;h.sling.cyclesTarget=1;
   h.sling.halfSwings=2;h.sling.anchorX=790;h.sling.amplitude=20;
-  h.sling.dashDir=1;h.sling.phaseTime=0;
+  h.sling.targetX=598;h.sling.dashDir=1;h.sling.phaseTime=0;
   h.paddle.x=598;h.paddle.w=200;h.W=800;
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'cooldown','a boundary-clamped zero-length dash must cancel');

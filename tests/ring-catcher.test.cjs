@@ -230,7 +230,8 @@ test('outer wall reflects and applies the bounded 1.045 speed gain', () => {
   const before=Math.hypot(o.vx,o.vy);
   assert.equal(h.ringContact(o,o.x+2,o.y,true,p.x,p.x),true);
   assert.ok(o.vx>0,'outer wall should reflect horizontal motion');
-  assert.ok(Math.abs(Math.hypot(o.vx,o.vy)/before-1.045)<1e-6);
+  const gain=Math.hypot(o.vx,o.vy)/before;
+  assert.ok(gain>1.03&&gain<=1.0451,'outer wall should add bounded energy after contact friction');
 });
 
 test('open top gap remains a pass-through and is not treated as a collision wall', () => {

@@ -642,7 +642,8 @@
     if(ringSling.phase!=='idle'&&ringSling.phase!=='cooldown'&&ringSling.phaseTime>phaseLimit){
       ringSling.abortReason='阶段超时';
       recordRingEvaluation('cancel',{skill:'sling',reason:ringSling.abortReason});
-      ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.focus=null;
+      ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.phaseTime=0;ringSling.focus=null;
+      return ringSling; // 超时帧不同时扣除冷却，避免大 dt 直接跳过保护状态。
     }
     if(ringSling.phase==='cooldown'){
       ringSling.cooldown=Math.max(0,ringSling.cooldown-d);

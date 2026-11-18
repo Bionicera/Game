@@ -732,8 +732,11 @@
     if(shape!=='ring'||!o||!Number.isFinite(o.x)||!Number.isFinite(o.y)||
        !Number.isFinite(o.r)||o.r<=0||!finiteVelocity(o.vx)||!finiteVelocity(o.vy))return invalid();
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
+    const vx0=o.vx||0,vy0=o.vy||0;
+    const speed=Math.hypot(vx0,vy0),radial0=Math.hypot(o.x-cx,o.y-cy);
+    if(!Number.isFinite(speed)||!Number.isFinite(radial0))return invalid();
     const horizon=clamp(Number.isFinite(maxTime)?maxTime:1.5,.08,2.4);
-    const speed=Math.hypot(o.vx||0,o.vy||0),dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/1000,1/60);
+    const dt=clamp(Math.min(1/60,(o.r||ball.r)*.38/Math.max(1,speed)),1/1000,1/60);
     const steps=Math.min(480,Math.ceil(horizon/dt));
     const r=Math.max(1,o.r||ball.r),gap=RING_GAP_HALF(),throat=R-RING_WALL();
     const clearHalf=Math.max(0,throat*Math.sin(gap)-r-.75);
@@ -791,7 +794,7 @@
   // 第一阶段感知器：统一测量速度、趋势、圆环相对几何、缺口通行与近似碰撞时间。
   // 这是观测模型，不是物理模拟；预测值仅供决策参考，真实碰撞仍由 ringContact 负责。
   function updateRingSensor(dt,o){
-    if(shape!=='ring'||!o){
+    const invalidate=()=>{
       ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;
       ringSensor.acceleration=0;ringSensor.speed=0;ringSensor.speedRatio=0;
       ringSensor.speedClass='stopped';ringSensor.speedTrend='stable';
@@ -801,27 +804,20 @@
       ringSensor.innerClearance=null;ringSensor.outerClearance=null;ringSensor.radialDistance=null;
       ringSensor.radialVelocity=0;ringSensor.kineticIndex=0;
       return ringSensor;
-    }
+    };
+    if(shape!=='ring'||!o)return invalidate();
     // 感知入口先做数值隔离：NaN/Infinity 不得进入状态机、ETA 或挡板目标。
     const finiteVelocity=(v)=>v===undefined||v===null||Number.isFinite(v);
     if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||!Number.isFinite(o.r)||o.r<=0||
-       !finiteVelocity(o.vx)||!finiteVelocity(o.vy)){
-      ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;
-      ringSensor.acceleration=0;ringSensor.speed=0;ringSensor.speedRatio=0;
-      ringSensor.speedClass='stopped';ringSensor.speedTrend='stable';
-      ringSensor.nextWall=null;ringSensor.etaInner=null;ringSensor.etaOuter=null;
-      ringSensor.gapEta=null;ringSensor.gapPredictedX=null;ringSensor.gapOffset=null;
-      ringSensor.gapPassable=false;ringSensor.trajectoryEvents=[];ringSensor.trajectoryTime=0;
-      ringSensor.innerClearance=null;ringSensor.outerClearance=null;ringSensor.radialDistance=null;
-      ringSensor.radialVelocity=0;ringSensor.kineticIndex=0;
-      return ringSensor;
-    }
+       !finiteVelocity(o.vx)||!finiteVelocity(o.vy))return invalidate();
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
     const dx=o.x-cx,dy=o.y-cy,radial=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+    const vx=o.vx||0,vy=o.vy||0,speedNow=Math.hypot(vx,vy),ratio=speedNow/Math.max(1,baseSpeed());
+    // 有限输入也可能在平方/乘法中溢出；派生量不可信时同样隔离。
+    if(!Number.isFinite(radial)||!Number.isFinite(speedNow)||!Number.isFinite(ratio))return invalidate();
     // atan2 返回 [-π,π]，而内环轮廓使用从缺口右侧开始的连续角区间；左下象限需映射到同一轮廓区间。
     const innerStart=-Math.PI/2+RING_GAP_HALF();
     const innerAngle=angle<innerStart?angle+Math.PI*2:angle;
-    const vx=o.vx||0,vy=o.vy||0,speedNow=Math.hypot(vx,vy),ratio=speedNow/Math.max(1,baseSpeed());
     let acceleration=ringSensor.acceleration||0;
     if(dt>1e-4&&ringSensor.valid&&ringSensor.previousObject===o&&Number.isFinite(ringSensor.previousSpeed)){
       const measured=(speedNow-ringSensor.previousSpeed)/dt;
@@ -874,7 +870,7 @@
       valid:true,speed:speedNow,speedRatio:ratio,speedClass,acceleration,speedTrend,
       vx,vy,direction:Math.atan2(vy,vx),radialDistance:radial,radialVelocity,angle,
       innerClearance,outerClearance,radialZone,gapHalfClearance,gapEta,gapPredictedX,gapOffset,gapPassable,
-      etaInner,etaOuter,nextWall,kineticIndex:ratio*ratio,
+      etaInner,etaOuter,nextWall,kineticIndex:Math.min(1e12,ratio*ratio),
       trajectoryEvents:trajectory.events,trajectoryTime:trajectory.simulatedTime,
       updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:dt>1e-4?speedNow:ringSensor.previousSpeed,previousObject:dt>1e-4?o:ringSensor.previousObject
     };

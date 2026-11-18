@@ -1086,8 +1086,7 @@
       ruleUtility+=.22*clamp((chainUtility-value(first.b))/4,-.5,1);
       const learned=paddleBrainEvaluate(paddleBrainFeatures(rel,ang,value(first.b),first.x,candidateX,want,focus));
       const utility=Number.isFinite(learned)?ruleUtility*.65+learned*.35:ruleUtility;
-      const modePenalty=isRing&&ringAimMode(rel,r)==='capture' ? .025:0;
-      const cost=-utility+switchPenalty+relPenalty+modePenalty+(first.x<0||first.x>W?.08:0);
+      const cost=-utility+switchPenalty+relPenalty+(first.x<0||first.x>W?.08:0);
       if(!best||cost<best.cost)
         best={cost,rel,Ux,brick:first.b,err:0,need:ang,tx:first.x,landX:candidateX,
           mode:isRing?ringAimMode(rel,r):'standard',chainCount:path.hits.length,brain:learned};
@@ -3563,7 +3562,9 @@
       ctx.globalAlpha = .3 + .12 * Math.sin(time * 4);
       ctx.strokeStyle = '#9ff8d4'; ctx.lineWidth = 1.2; ctx.setLineDash([4, 7]);
       ctx.beginPath();
-      ctx.moveTo(paddle.x + tt * paddle.w, surfaceY(tt) - 3);
+      const aimX=shape==='ring'?paddle.x+paddle.w/2+ringAimOffset(aimPlan.rel):paddle.x+tt*paddle.w;
+      const aimY=shape==='ring'?ringAimContactY(aimPlan.rel,ball.r):surfaceY(tt);
+      ctx.moveTo(aimX,aimY-3);
       ctx.lineTo(q.x + q.w / 2, q.y + q.h);
       ctx.stroke(); ctx.setLineDash([]);
       ctx.globalAlpha = .65 + .3 * Math.sin(time * 4);

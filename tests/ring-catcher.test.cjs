@@ -760,3 +760,37 @@ test('active sling aborts immediately when RingSensor becomes invalid', () => {
   assert.equal(h.sling.phase,'idle');
   assert.equal(h.sling.focus,null);
 });
+
+
+test('RingSling cancels when the focused ball changes during an active sequence', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const first={x:200,y:420,vx:100,vy:0,r:8},second={x:240,y:410,vx:-80,vy:20,r:8};
+  assert.equal(h.beginRingSling(first),true);
+  h.updateRingSling(.016,second);
+  assert.equal(h.sling.phase,'idle');
+  assert.equal(h.sling.focus,null);
+  assert.equal(h.evaluator.cancelled,1);
+});
+
+test('RingSling phase timeout enters cooldown without skipping its safety window on a large frame', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h.beginRingSling(focus),true);
+  h.updateRingSling(3.21,focus);
+  assert.equal(h.sling.phase,'cooldown');
+  assert.equal(h.sling.cooldown,.45);
+  assert.equal(h.sling.focus,null);
+  assert.equal(h.sling.abortReason,'阶段超时');
+});
+
+test('RingSling survival catch preempts oscillation before dash or release', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h.beginRingSling(focus),true);
+  h.planner.skill='safe-catch';
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'cooldown');
+  assert.equal(h.sling.cooldown,.45);
+  assert.equal(h.sling.focus,null);
+  assert.equal(h.evaluator.cancelled,1);
+});

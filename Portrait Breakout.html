@@ -2915,23 +2915,60 @@
     }
 
     if(firstLevelCover){
+      // 第一关封面标题：作为星空背景中的品牌主视觉，不再像 HUD 标签一样占一条横栏。
+      // 标题绘制在砖块之前，彩虹弧形经过时会自然叠在文字光效前方。
       ctx.save();
+      const titleY = topInset + Math.max(27, Math.min(43, area * .105));
       ctx.textAlign = 'center';
-      ctx.shadowColor = 'rgba(130,170,255,.7)';
-      ctx.shadowBlur = 16;
-      ctx.fillStyle = '#f4f0ff';
-      ctx.font = '800 ' + clamp(W*.062, 20, 27) + 'px system-ui,-apple-system,sans-serif';
-      ctx.fillText('RAINBOW GALAXY', W*.5, topInset+23);
-      ctx.shadowBlur = 7;
-      ctx.fillStyle = 'rgba(190,220,255,.9)';
-      ctx.font = '600 ' + clamp(W*.027, 10, 12) + 'px system-ui,-apple-system,sans-serif';
-      ctx.fillText('第一关 · 彩虹星河', W*.5, topInset+43);
-      const line = ctx.createLinearGradient(W*.22,0,W*.78,0);
+      ctx.textBaseline = 'alphabetic';
+
+      // 柔和的椭圆星云托起标题，让字融入宇宙，而不是放进实体底框。
+      const titleGlow = ctx.createRadialGradient(W*.5, titleY-8, 2, W*.5, titleY-8, W*.43);
+      titleGlow.addColorStop(0, 'rgba(120,105,255,.19)');
+      titleGlow.addColorStop(.55, 'rgba(95,115,255,.075)');
+      titleGlow.addColorStop(1, 'rgba(80,110,255,0)');
+      ctx.fillStyle = titleGlow;
+      ctx.fillRect(W*.08, titleY-48, W*.84, 72);
+
+      // 中文品牌名为主标题，采用珍珠白到淡金的渐变和克制的星光辉映。
+      ctx.shadowColor = 'rgba(150,175,255,.78)';
+      ctx.shadowBlur = 19;
+      const cn = ctx.createLinearGradient(W*.35, titleY-27, W*.65, titleY);
+      cn.addColorStop(0, '#ffffff');
+      cn.addColorStop(.55, '#e8e7ff');
+      cn.addColorStop(1, '#ffe6bd');
+      ctx.fillStyle = cn;
+      ctx.font = '900 ' + clamp(W*.078, 25, 33) + 'px system-ui,-apple-system,"PingFang SC",sans-serif';
+      ctx.fillText('彩虹星河', W*.5, titleY);
+
+      // 英文作为品牌副标题，字距感通过两侧星点与细线营造。
+      ctx.shadowColor = 'rgba(105,190,255,.7)';
+      ctx.shadowBlur = 10;
+      ctx.fillStyle = 'rgba(205,225,255,.94)';
+      ctx.font = '700 ' + clamp(W*.029, 10, 12) + 'px system-ui,-apple-system,sans-serif';
+      ctx.fillText('R A I N B O W   G A L A X Y', W*.5, titleY+17);
+
+      const lineY = titleY + 26;
+      const line = ctx.createLinearGradient(W*.18,0,W*.82,0);
       line.addColorStop(0,'rgba(120,150,255,0)');
-      line.addColorStop(.5,'rgba(190,210,255,.65)');
+      line.addColorStop(.28,'rgba(135,190,255,.28)');
+      line.addColorStop(.5,'rgba(225,225,255,.72)');
+      line.addColorStop(.72,'rgba(255,155,220,.3)');
       line.addColorStop(1,'rgba(255,130,220,0)');
+      ctx.shadowBlur = 7;
       ctx.strokeStyle = line; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(W*.22,topInset+53); ctx.lineTo(W*.78,topInset+53); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(W*.18,lineY); ctx.lineTo(W*.82,lineY); ctx.stroke();
+
+      // 两颗微型星芒让标题有封面识别点，亮度轻微呼吸，不干扰游戏。
+      const sparkle = .62 + .28 * Math.sin(time * 1.7);
+      for(const x of [W*.22, W*.78]){
+        ctx.globalAlpha = sparkle;
+        ctx.fillStyle = '#d9eaff';
+        ctx.shadowColor = '#9bdcff'; ctx.shadowBlur = 9;
+        ctx.beginPath(); ctx.arc(x, titleY-9, 1.7, 0, 6.283); ctx.fill();
+        ctx.beginPath(); ctx.moveTo(x-4,titleY-9); ctx.lineTo(x+4,titleY-9);
+        ctx.moveTo(x,titleY-13); ctx.lineTo(x,titleY-5); ctx.stroke();
+      }
       ctx.restore();
     }
 

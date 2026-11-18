@@ -814,11 +814,20 @@
     if(contact.kind==='inner'){
       // 内壁是软捕捉/导向面：压低法向反弹，保留大部分切向运动，让球沿不规则内壁滑行并逐步减速。
       const nx=contact.n.x,ny=contact.n.y,tx=-ny,ty=nx;
+      const beforeSpeed=Math.hypot(o.vx,o.vy);
       const rvx=o.vx-paddle.vx,rvy=o.vy;
       const vn=rvx*nx+rvy*ny,vt=rvx*tx+rvy*ty;
-      const softNormal=-vn*.28,softTangent=vt*.94;
+      // 内壁软捕捉：弱化法向弹跳、保留切向滑行；动能保底只在碰撞后触发，
+      // 防止连续擦壁把球耗到停住，同时仍允许每次接触产生可感知的减速。
+      const softNormal=-vn*.35,softTangent=vt*.97;
       o.vx=paddle.vx+softNormal*nx+softTangent*tx;
       o.vy=softNormal*ny+softTangent*ty;
+      const afterSpeed=Math.hypot(o.vx,o.vy);
+      const safeSpeed=Math.max(beforeSpeed*.72,baseSpeed()*.45);
+      if(afterSpeed>0&&afterSpeed<safeSpeed){
+        const keep=safeSpeed/afterSpeed;
+        o.vx*=keep;o.vy*=keep;
+      }
       if(isMain){
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
         beep(390,.045,'sine',.025);

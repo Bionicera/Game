@@ -138,7 +138,6 @@
   .hud2 .hud-left{flex:0 0 auto;gap:9px}
   .hud-right{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0}
   .hud-right .auto-slot{gap:0;flex:0 0 auto}
-  .hud-right #uiTip{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
   .shapes{display:flex;gap:2px;flex:0 0 auto;padding:2px;border-radius:10px;pointer-events:auto;
     background:rgba(16,28,56,.55);border:1px solid rgba(150,190,255,.16);
     transition:opacity .2s}
@@ -208,7 +207,6 @@
           <button class="shape" data-shape="triangle" title="等边三角形挡板" aria-label="等边三角形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3.3 36 31 4 31Z"/></svg></button>
         </div>
         <div class="tools auto-slot"><button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button></div>
-        <div class="sub" id="uiTip">点球或碰挡板发球</div>
       </div>
     </div>
   </div>
@@ -2124,42 +2122,9 @@
     $('uiLives').textContent = fmtLives();
     $('uiLevel').textContent = '第 ' + level + ' 关';
     syncSpeedHUD();
-    const narrow = W > 0 && W < 390;
     const ab = $('btnAuto');
     ab.classList.toggle('on', autoPilot);
     ab.setAttribute('aria-pressed', autoPilot ? 'true' : 'false');
-    const t = levelType(), tipEl = $('uiTip');
-    if(state === 'paused') tipEl.textContent = narrow ? '已暂停' : '已暂停 · 轻触继续';
-    else if(bleed && bleed.active)
-      tipEl.textContent = (narrow ? '失血 ' : '☠ 失血 ') + Math.ceil(bleed.t) + 's · '
-                        + bleed.kills + '/' + bleed.need;
-    else if(curse && (curse.drunkT > 0 || curse.spinT > 0 || curse.gravityT > 0))
-      tipEl.textContent = narrow ? '诅咒中' : '🌀 诅咒生效中 · 6s';
-    else if(isCurseLevel())
-      tipEl.textContent = state === 'serving' ? '弹珠台 · 点球发射' : '击碎剩余 ' + bricks.filter(b => b.alive).length + ' 块目标砖 · 躲开球袋';
-    else if(t === LT.FORTRESS)
-      tipEl.textContent = state === 'serving' ? '堡垒关 · 上墙双固定缺口' : '上墙缺口固定 · 下墙通道移动';
-    else if(t === LT.TRAP)
-      tipEl.textContent = state === 'serving' ? '陷阱关 · 清除非负面砖即可通关'
-        : '剩余目标砖 ' + bricks.filter(b => b.alive && b.type !== 'trap' && b.type !== 'bleed').length + ' 块 · 负面砖可留下';
-    else if(isSnakeLevel())
-      tipEl.textContent = state === 'serving' ? (narrow ? '贪吃蛇·点球' : '贪吃蛇关 · 点球发球')
-        : (narrow ? '打蛇尾' : '从尾巴打起 · 绿框');
-    else if(t === LT.GALAGA)
-      tipEl.textContent = state === 'serving'
-        ? (narrow ? '俯冲编队·点球' : '俯冲编队关 · 点球发球')
-        : (narrow ? '已击落 ' + galagaKills
-                  : '俯冲编队 · 已击落 ' + galagaKills);
-    else if(t === LT.DROP)
-      tipEl.textContent = state === 'serving' ? (narrow ? '落砖·点球' : '落砖关 · 点球发球')
-        : (autoPilot ? (narrow ? 'Auto 躲砖' : 'Auto 躲避落砖中')
-                     : (narrow ? '躲落砖' : '落砖关 · 躲开掉落的砖'));
-    else if(autoPilot)
-      tipEl.textContent = state === 'serving' ? (narrow ? 'Auto 发球' : 'Auto · 马上自动发球')
-        : (narrow ? 'Auto 瞄准' : 'Auto · 补心 ' + heartStep(level) + ' 分');
-    else
-      tipEl.textContent = state === 'serving' ? (narrow ? '点球发球' : '点球或碰挡板发球')
-        : (narrow ? '补心 ' + heartStep(level) : '补心 ' + heartStep(level) + ' 分 · 挡板改变球路');
     $('btnPause').textContent = state === 'paused' ? '▶' : '⏸';
     updateShapeMenu();
   }

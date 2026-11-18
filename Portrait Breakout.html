@@ -1866,7 +1866,7 @@
     const o=actx.createOscillator(), g=actx.createGain();
     o.type='sine'; o.frequency.setValueAtTime(accent?105:88,at);
     o.frequency.exponentialRampToValueAtTime( fortyHz(),at+.105);
-    g.gain.setValueAtTime(accent?.105:.075,at);
+    g.gain.setValueAtTime(accent?.075:.052,at);
     g.gain.exponentialRampToValueAtTime(.0001,at+.13);
     o.connect(g); g.connect(musicMaster); o.start(at); o.stop(at+.14);
   }
@@ -1884,30 +1884,30 @@
   function scheduleMusicStep(step,at){
     const barIndex=Math.floor(step/16), beatStep=step%16, bar=musicBars[barIndex];
     const lead=bar.lead[beatStep];
-    if(lead) musicTone(lead,at,MUSIC_STEP*(beatStep%4===0?1.55:1.12),'triangle',.052);
+    if(lead) musicTone(lead,at,MUSIC_STEP*(beatStep%4===0?1.45:1.05),'sine',.027);
     // 第二声部只在句尾回应，避免持续高频堆叠
     const answer=musicAnswers[barIndex][beatStep];
-    if(answer) musicTone(answer,at,MUSIC_STEP*.9,'square',.018,-4);
+    if(answer) musicTone(answer,at,MUSIC_STEP*.82,'triangle',.009,-3);
     // 低音采用根音、五度和经过音，留出呼吸而非每拍双倍轰鸣
     if(beatStep===0 || beatStep===6 || beatStep===8 || beatStep===14){
       const bass=bar.root+(beatStep===6||beatStep===14?7:0);
-      musicTone(bass,at,MUSIC_STEP*(beatStep%8===0?3.1:1.65),'triangle',.095);
+      musicTone(bass,at,MUSIC_STEP*(beatStep%8===0?3.1:1.65),'triangle',.075);
     }
     // 柔和和弦短铺底：每小节只落在强拍，不与主旋律抢频段
     if(beatStep===0 || beatStep===8){
-      bar.chord.forEach((n,i)=>musicTone(n,at,MUSIC_STEP*2.8,'triangle',.012+i*.001));
+      bar.chord.forEach((n,i)=>musicTone(n,at,MUSIC_STEP*2.8,'triangle',.009+i*.0007));
     }
     // 轻量琶音与切分点缀
     if([2,5,10,13].includes(beatStep)){
       const arp=bar.chord[[2,1,0,1][[2,5,10,13].indexOf(beatStep)]]+12;
-      musicTone(arp,at,MUSIC_STEP*.58,'triangle',.018);
+      musicTone(arp,at,MUSIC_STEP*.58,'triangle',.011);
     }
     // 鼓组强调二、四拍；镲片降低亮度与音量，末小节短过门
     if(beatStep===0) musicKick(at,true);
     if(beatStep===8) musicKick(at,false);
-    if(beatStep===4 || beatStep===12) musicNoise(at,.075,.026,false);
-    if(beatStep===2 || beatStep===6 || beatStep===10 || beatStep===14) musicNoise(at,.022,.009,true);
-    if(barIndex===3 && beatStep>=12 && beatStep%2===0) musicNoise(at,.035,.016,false);
+    if(beatStep===4 || beatStep===12) musicNoise(at,.075,.018,false);
+    if(beatStep===2 || beatStep===6 || beatStep===10 || beatStep===14) musicNoise(at,.022,.006,true);
+    if(barIndex===3 && beatStep>=12 && beatStep%2===0) musicNoise(at,.035,.011,false);
   }
   function musicScheduler(){
     if(!musicStarted || !musicEnabled || !actx || actx.state!=='running') return;
@@ -1925,10 +1925,10 @@
       if(!musicMaster){
         // 低通先收敛刺耳高频，再压缩峰值；最终输出留足余量
         musicFilter=actx.createBiquadFilter(); musicFilter.type='lowpass';
-        musicFilter.frequency.value=6800; musicFilter.Q.value=.35;
+        musicFilter.frequency.value=4800; musicFilter.Q.value=.3;
         musicComp=actx.createDynamicsCompressor();
-        musicComp.threshold.value=-23; musicComp.knee.value=18; musicComp.ratio.value=3.2;
-        musicComp.attack.value=.012; musicComp.release.value=.24;
+        musicComp.threshold.value=-26; musicComp.knee.value=24; musicComp.ratio.value=4.2;
+        musicComp.attack.value=.018; musicComp.release.value=.3;
         musicMaster=actx.createGain(); musicMaster.gain.value=0;
         musicMaster.connect(musicFilter); musicFilter.connect(musicComp); musicComp.connect(actx.destination);
       }
@@ -1936,7 +1936,7 @@
       $('btnMusic').textContent='♫'; $('btnMusic').setAttribute('aria-pressed','true');
       $('btnMusic').setAttribute('aria-label','关闭背景音乐');
       musicMaster.gain.cancelScheduledValues(actx.currentTime);
-      musicMaster.gain.setTargetAtTime(state==='paused'?0:.24,actx.currentTime,.32);
+      musicMaster.gain.setTargetAtTime(state==='paused'?0:.19,actx.currentTime,.32);
       if(!musicStarted){
         musicStarted=true; musicNextTime=actx.currentTime+.08; musicStep=0;
         musicTimer=setInterval(musicScheduler,25);

@@ -272,8 +272,8 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
  
 ## 当前阶段与下一步
 
-**当前任务：阶段 2 · RingSkills 第一项（甩球）已进入开发侧回归；继续完成浏览器级动作链验证与其余基础技能。**
-在开发侧集中测试未完成前，不要求用户手机实测；阶段 2-5 的完整规格已经冻结为施工蓝图，实际编码仍按退出门槛逐段实施。
+**当前任务：阶段 2-5 第一轮集成已完成，进入稳健性加固与全链路压力回归。**
+甩球、捕捉/减速、外壁增能、移动/导流、缺口引导、组合仲裁、评估器和有限步轨迹预测均已接入生产代码；下一轮优先修复非有限物理输入、边界帧与状态清理问题，再扩大 Chromium 长时场景。用户手机实测仍暂缓。
 
 ## 当前基线与本次施工记录
 
@@ -323,5 +323,19 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 
 ## 当前状态
 
-**当前焦点：RingSling 第一版及生产碰撞链单元回归通过（25/25）；接下来继续浏览器级动作链测试与其他基础技能。**  
-完整 RingSensor → RingState → RingPlanner → RingSkills → RingPhysics → RingEvaluator 施工图及退出门槛已补齐。当前先建立可执行测试工具，审查第一版感知/决策代码并修复可复现问题；开发侧 A-D 测试完成前，不要求用户手机实测。
+**当前焦点：RingSensor → RingState → RingPlanner → RingSkills → RingPhysics → RingEvaluator 第一轮已集成；最新已确认 CI 为 52/52 Node 测试通过，Chromium Canvas / Planner / 甩球动作链 / 4.5 秒实时 Auto smoke 通过。**  
+这不是手机实测，也不是长时间压力测试。当前正在增加非有限球状态防护和极端速度预测预算测试；新增回归结果以最新 Actions 运行记录为准。
+
+
+### 2026-11-18 · 稳健性加固 · 非有限物理输入与极端预测
+- 目标：防止球体坐标/速度异常值污染 RingSensor、RingState 与挡板目标；验证轨迹预测在极端速度和超大时间窗口下仍有固定工作量上限。
+- 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`。
+- 新增/修改能力：RingSensor 在读取几何与 ETA 前检查球体 x/y/r 及显式 vx/vy；遇到 NaN、Infinity 或非正半径时清空历史速度趋势与碰撞 ETA，并返回 invalid，让上层规划安全回退；缺省速度仍视为静止，兼容待发球/简化观测。
+- 新增测试：非法坐标、非法速度、无效半径拒绝；缺省速度保持合法；Auto 关闭/挡板形状切换时甩球状态清理；极端速度和超大预测窗口不超过 480 步预算且不修改球对象。
+- 未触碰的系统：内外壁物理系数、甩球映射、出生点、缺口几何、音乐、封面、HUD、其他四种挡板、发布配置。
+- 静态检查：待本次 GitHub Actions 运行确认。
+- 场景验证：此前基线 52/52 Node 测试与 Chromium smoke 已通过（[run 44253947061](https://github.com/Bionicera/Game/actions/runs/44253947061)）；本轮新增 4 项回归，结果待确认。
+- 手机实测：未测试。
+- 已知问题：Chromium live Auto 目前为 4.5 秒短时场景；后续仍需扩展多分钟模拟、帧时抖动、窗口失焦/恢复及更多边界场景。
+- 下一步：继续扩大浏览器物理压力测试与自动驾驶中断/恢复测试，不把短时 smoke 误报为完整验收。
+- Commit：`45233fa1899119a1ab5de0a5b47260071c059cfe`（传感器输入防护）；`8847ba2fbb691145270d93f36b0557a49766e49d`（新增回归）；`b72db00ccaea1b91089d21751682617375743c08`（测试夹具修正）。

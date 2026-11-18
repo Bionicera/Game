@@ -251,7 +251,7 @@
   let paddle = {x:0,y:0,w:90,h:14,targetX:0,vx:0};
   let ball = {x:0,y:0,vx:0,vy:0,r:7};
   // 圆环捕手专属情绪：纯表现层状态，不参与任何碰撞、速度或瞄准计算。
-  let ringMood = {face:'🤪',t:0,cooldown:0,streak:0,comboT:0};
+  let ringMood = {face:'🤪',t:0,cooldown:0,streak:0,comboT:0,resumeFlight:false};
   let ringMoodSeed = 0x6d2b79f5;
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
@@ -1998,11 +1998,47 @@
     ringMoodSeed=(Math.imul(ringMoodSeed,1664525)+1013904223)>>>0;
     return ringMoodSeed/4294967296;
   }
-  function ringMoodEvent(face,duration){
+  function ringMoodEvent(face,duration,resumeFlight){
     if(shape!=='ring') return;
     ringMood.face=face;
     ringMood.t=duration||1.15;
     ringMood.cooldown=.72;
+    ringMood.resumeFlight=!!resumeFlight;
+  }
+  // 线段与扩张矩形的 slab 检测，用球的整段帧轨迹判断是否擦过砖块。
+  function ringSegmentHitsAABB(x0,y0,x1,y1,rect,pad){
+    const left=rect.x-pad,right=rect.x+rect.w+pad;
+    const top=rect.y-pad,bottom=rect.y+rect.h+pad;
+    const dx=x1-x0,dy=y1-y0;
+    let tMin=0,tMax=1;
+    if(Math.abs(dx)<1e-9){if(x0<left||x0>right)return false;}
+    else{
+      let a=(left-x0)/dx,b=(right-x0)/dx;if(a>b){const q=a;a=b;b=q;}
+      tMin=Math.max(tMin,a);tMax=Math.min(tMax,b);if(tMin>tMax)return false;
+    }
+    if(Math.abs(dy)<1e-9){if(y0<top||y0>bottom)return false;}
+    else{
+      let a=(top-y0)/dy,b=(bottom-y0)/dy;if(a>b){const q=a;a=b;b=q;}
+      tMin=Math.max(tMin,a);tMax=Math.min(tMax,b);if(tMin>tMax)return false;
+    }
+    return tMax>=0&&tMin<=1;
+  }
+  // 只把“擦到目标附近但没有进入球体碰撞范围”视为落空；撞墙不参与判定。
+  function ringNearMiss(x0,y0,x1,y1,r){
+    if(shape!=='ring'||ringMood.t>0||ringMood.cooldown>0)return false;
+    const margin=Math.max(7,r*1.1),pad=r+margin;
+    const area={x:Math.min(x0,x1)-pad,y:Math.min(y0,y1)-pad,
+      w:Math.abs(x1-x0)+pad*2,h:Math.abs(y1-y0)+pad*2};
+    for(const b of worldGrid.queryAABB(area,COLLISION_LAYER.PROJECTILE)){
+      if(!b.alive)continue;
+      const q=b.entityKind==='galaga-diver'?diverRect(b):brickRect(b);
+      if(ringSegmentHitsAABB(x0,y0,x1,y1,q,r))continue;
+      if(ringSegmentHitsAABB(x0,y0,x1,y1,q,pad)){
+        ringMoodEvent('😣',.5,true);
+        return true;
+      }
+    }
+    return false;
   }
 
   /* ---------- 音效 ---------- */
@@ -2326,6 +2362,11 @@
       ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);
       ringMood.comboT=Math.max(0,ringMood.comboT-dt);
       if(ringMood.comboT===0) ringMood.streak=0;
+      // 落空表情持续半秒后明确切回🤪，不再随机抽到另一个负面表情。
+      if(state==='playing' && ringMood.t===0 && ringMood.resumeFlight){
+        ringMood.resumeFlight=false;
+        ringMood.face='🤪';ringMood.t=.65;ringMood.cooldown=.65;
+      }
       // 球高速下坠且偏离圆环中心时，先抽取一次险些失误事件。
       if(state==='playing' && ringMood.t===0 && ringMood.cooldown===0 &&
          ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
@@ -2531,7 +2572,9 @@
     }
 
     // 掉球：主球扣一颗心并停在挡板上待发射；辅球掉出底部直接消失、不扣血
-    if(ball.y - r > H + 6) loseLife();
+    if(ball.y - r > H + 6){loseLife();return;}
+    // 圆环专属“擦身而过”：没有进入实际碰撞半径、但贴近目标边缘时短暂😣。
+    ringNearMiss(px,py,ball.x,ball.y,r);
   }
 
   // 额外球：独立物理，撞砖复用 damageBrick，掉出屏幕直接消失、不扣血

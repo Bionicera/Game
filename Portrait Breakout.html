@@ -266,6 +266,13 @@
     valid:false,mode:'attack',priority:'normal',intent:'boost',reason:'等待感知数据',
     confidence:0,speedClass:'stopped',speedTrend:'stable',risk:0,hold:0,updatedAt:0
   };
+  // RingSling：内环左右震荡蓄力 → 单向短冲 → 反侧缺口端真实甩出。
+  // 仅 Auto + 主球 + 圆环模式启用；不做位置瞬移，只有命中真实缺口端时才施加甩出速度。
+  let ringSling = {
+    phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
+    cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,
+    dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:0,lastAngle:0
+  };
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -582,6 +589,95 @@
     const mode=ringAimMode(rel,r),n=ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
     const gain=mode==='capture'?.90:1.045;
     return {vx:out.vx*gain,vy:out.vy*gain,mode};
+  }
+
+  // 甩球的预备方向由攻击目标决定；圆环向目标反方向短冲，最终从反侧缺口端出球。
+  function beginRingSling(o){
+    if(shape!=='ring'||!autoPilot||state!=='playing'||!o||ringSling.phase!=='idle')return false;
+    const center=paddle.x+paddle.w/2;
+    const targetX=aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:o.x+o.vx*.35;
+    const exitSide=Math.sign(targetX-center)||Math.sign(o.vx)||1;
+    const dashDir=-exitSide;
+    const ratio=Math.max(0,Math.hypot(o.vx,o.vy)/Math.max(1,baseSpeed()));
+    // 低速球多震荡蓄能，高速球少震荡，避免无谓堆速。
+    const cyclesTarget=clamp(Math.round(4-ratio*1.5),1,4);
+    const amplitude=clamp(paddle.w*.17,16,44);
+    const firstTarget=clamp(paddle.x+dashDir*amplitude,2,W-paddle.w-2);
+    ringSling={
+      phase:'oscillate',focus:o,anchorX:paddle.x,targetX:firstTarget,dashDir,exitSide,
+      cyclesTarget,halfSwings:0,amplitude,dashStartX:paddle.x,dashDistance:0,
+      dashProgress:0,releaseTimer:0,cooldown:0,lastCycles:ringSling.lastCycles||0,lastAngle:0
+    };
+    return true;
+  }
+
+  // 状态推进只控制挡板目标位置；球仍由真实内壁碰撞和缺口端碰撞驱动。
+  function updateRingSling(dt,focus){
+    if(shape!=='ring'||!autoPilot||state!=='playing'||!focus){
+      if(ringSling.phase!=='idle'){
+        const lastCycles=ringSling.lastCycles||0;
+        ringSling={phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
+          cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,
+          dashProgress:0,releaseTimer:0,cooldown:0,lastCycles,lastAngle:ringSling.lastAngle||0};
+      }
+      return ringSling;
+    }
+    if(ringSling.phase!=='idle'&&ringSling.focus!==focus){
+      ringSling.phase='idle';ringSling.focus=null;
+    }
+    const d=Math.max(0,dt||0);
+    if(ringSling.phase==='cooldown'){
+      ringSling.cooldown=Math.max(0,ringSling.cooldown-d);
+      if(ringSling.cooldown===0)ringSling.phase='idle';
+    }else if(ringSling.phase==='oscillate'){
+      if(Math.abs(paddle.x-ringSling.targetX)<=5){
+        ringSling.halfSwings++;
+        if(ringSling.halfSwings>=ringSling.cyclesTarget*2){
+          ringSling.phase='dash';
+          ringSling.dashStartX=paddle.x;
+          ringSling.dashDistance=clamp(RING_R()*(.12+.055*ringSling.cyclesTarget),18,RING_R()*.34);
+          ringSling.targetX=clamp(paddle.x+ringSling.dashDir*ringSling.dashDistance,2,W-paddle.w-2);
+        }else{
+          const sign=ringSling.halfSwings%2===0?ringSling.dashDir:-ringSling.dashDir;
+          ringSling.targetX=clamp(ringSling.anchorX+sign*ringSling.amplitude,2,W-paddle.w-2);
+        }
+      }
+    }else if(ringSling.phase==='dash'){
+      ringSling.dashProgress=clamp(Math.abs(paddle.x-ringSling.dashStartX)/Math.max(1,ringSling.dashDistance),0,1);
+      if(ringSling.dashProgress>=.9||Math.abs(paddle.x-ringSling.targetX)<=5){
+        ringSling.phase='release';ringSling.releaseTimer=0;
+      }
+    }else if(ringSling.phase==='release'){
+      ringSling.releaseTimer+=d;
+      if(ringSling.releaseTimer>.48){
+        ringSling.phase='idle';ringSling.focus=null;
+      }
+    }
+    return ringSling;
+  }
+
+  // 只在球真实接触「短冲反侧」的刀锋缺口端时释放；短冲距离控制出射角，
+  // 震荡完整周期数控制出射速度。没有命中端点就超时取消，不瞬移球心。
+  function tryReleaseRingSling(o,contact,isMain){
+    if(!isMain||!autoPilot||ringSling.phase!=='release'||!contact||contact.kind!=='inner')return false;
+    const R=RING_R(),centerX=paddle.x+paddle.w/2,centerY=paddle.y+paddle.h-R;
+    const angle=Math.atan2(contact.q.y-centerY,contact.q.x-centerX);
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+    const expected=ringSling.exitSide>0?start:end;
+    const delta=Math.atan2(Math.sin(angle-expected),Math.cos(angle-expected));
+    if(Math.abs(delta)>Math.max(.075,gap*.58))return false;
+    const dashRatio=clamp(ringSling.dashDistance/Math.max(1,R),.08,.42);
+    const launchAngle=ringSling.exitSide*(.10+.82*dashRatio);
+    const cycles=clamp(ringSling.cyclesTarget,1,4);
+    const current=Math.hypot(o.vx,o.vy);
+    const launchSpeed=clamp(Math.max(current,baseSpeed()*.72)*(.82+.12*cycles),baseSpeed()*.72,baseSpeed()*1.72);
+    o.vx=Math.sin(launchAngle)*launchSpeed;
+    o.vy=-Math.cos(launchAngle)*launchSpeed;
+    ringSling.lastCycles=cycles;ringSling.lastAngle=launchAngle;
+    ringSling.phase='cooldown';ringSling.cooldown=.72;ringSling.focus=null;
+    ringMoodEvent('🤩',.95);
+    beep(680+cycles*55,.07,'triangle',.045);
+    return true;
   }
 
   // 第一阶段感知器：统一测量速度、趋势、圆环相对几何、缺口通行与近似碰撞时间。
@@ -951,6 +1047,7 @@
     o.x=px+contact.q.x+contact.n.x*(o.r+.6);
     o.y=contact.q.y+contact.n.y*(o.r+.6);
     if(contact.kind==='inner'){
+      if(tryReleaseRingSling(o,contact,isMain))return true;
       // 内壁是软捕捉/导向面：压低法向反弹，保留大部分切向运动，让球沿不规则内壁滑行并逐步减速。
       const nx=contact.n.x,ny=contact.n.y,tx=-ny,ty=nx;
       const rvx=o.vx-paddle.vx,rvy=o.vy;
@@ -962,6 +1059,7 @@
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
         ringMoodEvent(ringMoodRandom()<.62?'😏':'🤓',1.25);
         beep(390,.045,'sine',.025);
+        if(isMain)beginRingSling(o);
       }
     }else{
       // 外环壁是硬攻击面：使用完整挡板反射，再给予轻微加速。
@@ -1529,6 +1627,8 @@
     // 多球时采用带滞回的优先球锁定，避免两颗球 ETA 接近时挡板反复换目标。
     const focus = selectAutoFocusBall();
     const r = focus.r;
+    if(shape==='ring'&&ringSling.phase!=='idle'&&ringSling.focus===focus)
+      return clamp(ringSling.targetX,2,W-paddle.w-2);
     // 弹珠台有弹力柱与扣命球袋，使用关卡专用前向模拟；不启用未经机关验证的攻击反推。
     if(isCurseLevel()){
       const predicted = focus.vy > 0 ? predictPlinkoLanding(focus) : null;
@@ -2495,9 +2595,11 @@
     if(shape==='ring'){
       const sensed=updateRingSensor(dt,ball);
       updateRingState(sensed,dt,ball);
+      updateRingSling(dt,ball);
     }else{
       updateRingSensor(0,null);
       ringState.valid=false;ringState.hold=0;
+      updateRingSling(0,null);
     }
     if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣' && ringMood.t>0))){
       ringMood.t=Math.max(0,ringMood.t-dt);

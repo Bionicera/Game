@@ -319,7 +319,7 @@ test('sling oscillation count changes release speed while equal dash distance ke
     const o={x:200,y:420,vx:100,vy:0,r:8};
     h.beginRingSling(o);
     h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;h.sling.cyclesTarget=cycles;
-    const R=94,cx=200,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+    const R=94,cx=100,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
     const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
     assert.equal(h.tryReleaseRingSling(o,contact,true),true);
     return {speed:Math.hypot(o.vx,o.vy),angle:h.sling.lastAngle};

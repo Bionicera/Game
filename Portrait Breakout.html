@@ -687,7 +687,7 @@
   // 只在球真实接触「短冲反侧」的刀锋缺口端时释放；短冲距离控制出射角，
   // 震荡完整周期数控制出射速度。没有命中端点就超时取消，不瞬移球心。
   function tryReleaseRingSling(o,contact,isMain){
-    if(!isMain||!autoPilot||ringSling.phase!=='release'||!contact||contact.kind!=='inner')return false;
+    if(!isMain||!autoPilot||ringSling.phase!=='release'||ringSling.focus!==o||!contact||contact.kind!=='inner')return false;
     // ringContact 的 q.x 是挡板局部坐标，q.y 保持画布绝对坐标。
     const R=RING_R(),centerX=paddle.w/2,centerY=paddle.y+paddle.h-R;
     const angle=Math.atan2(contact.q.y-centerY,contact.q.x-centerX);

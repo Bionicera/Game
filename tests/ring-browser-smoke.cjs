@@ -27,7 +27,8 @@ const { chromium } = require('playwright');
       const guide=planRingSkill({...base,speedRatio:1,speedClass:'cruise',radialZone:'inside'},{intent:'aim'},focus).skill;
       const danger={...focus,y:paddle.y+paddle.h-30,vy:200};
       const safe=planRingSkill(base,{intent:'boost'},danger).skill;
-      return {boost,capture,gap,guide,safe};
+      const trajectory=predictRingTrajectory({x:paddle.x+paddle.w/2,y:420,vx:0,vy:-300,r:ball.r},1.2);
+      return {boost,capture,gap,guide,safe,trajectory:trajectory.events.some(e=>e.type==='gap')};
     },
     chooseRing(){
       shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
@@ -88,7 +89,7 @@ const { chromium } = require('playwright');
     await page.evaluate(() => window.__ringTest.chooseRing());
     await page.waitForTimeout(40); // drain the already queued animation frame after disabling the loop
     const skills=await page.evaluate(() => window.__ringTest.plannerMatrix());
-    assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'guide',safe:'safe-catch'},
+    assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'guide',safe:'safe-catch',trajectory:true},
       'browser planner should arbitrate the complete base skill set');
     const capture=await page.evaluate(() => window.__ringTest.innerCapture());
     assert.equal(capture.hit,true,'production inner-wall collision should register');

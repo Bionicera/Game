@@ -722,3 +722,14 @@ test('RingSensor clears stale trajectory and gap observations when focus is abse
   assert.equal(invalid.gapEta,null);
   assert.deepEqual(invalid.trajectoryEvents,[]);
 });
+
+test('RingSensor and trajectory predictor reject overflowed derived radial velocity', () => {
+  const h=harness();
+  const extreme={x:1e308,y:1e308,vx:1e308,vy:1e308,r:8};
+  const sensor=h.updateRingSensor(.016,extreme);
+  assert.equal(sensor.valid,false,'finite raw values can still overflow derived geometry');
+  assert.equal(sensor.nextWall,null);
+  const predicted=h.predictRingTrajectory(extreme,1.5);
+  assert.equal(predicted.valid,false);
+  assert.equal(predicted.simulatedTime,0);
+});

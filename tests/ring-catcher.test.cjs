@@ -375,6 +375,25 @@ test('RingPlanner prioritizes survival, then gap guidance, capture, boost, and s
   assert.equal(h.planRingSkill(danger,{intent:'boost'},falling).skill,'safe-catch');
 });
 
+test('active sling keeps its action window unless the ball enters emergency catch range', () => {
+  const h=harness(),sensor={valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'stable',
+    gapEta:null,gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'outside'};
+  h.auto=true;
+  const focus={x:400,y:400,vx:0,vy:500,r:8};
+  h.sling.phase='oscillate';h.sling.focus=focus;h.sling.targetX=260;
+  const ordinaryWindow=h.planRingSkill(sensor,{intent:'boost'},focus);
+  assert.equal(ordinaryWindow.skill,'sling','ordinary 0.26s floor ETA must not interrupt an active combo');
+  assert.equal(ordinaryWindow.comboName,'sling');
+  const emergency={...focus,y:480};
+  h.sling.focus=emergency;
+  const urgent=h.planRingSkill(sensor,{intent:'boost'},emergency);
+  assert.equal(urgent.skill,'safe-catch','genuine near-immediate loss risk still preempts sling');
+  assert.equal(urgent.comboName,'survival');
+  h.sling.phase='idle';h.sling.focus=null;
+  const idleDanger=h.planRingSkill(sensor,{intent:'boost'},focus);
+  assert.equal(idleDanger.skill,'safe-catch','normal survival threshold remains unchanged outside sling');
+});
+
 test('RingPlanner guide and gap targets move the ring toward the ball path', () => {
   const h=harness(),focus={x:520,y:400,vx:0,vy:100,r:8};
   const sensor={valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'stable',gapEta:null,

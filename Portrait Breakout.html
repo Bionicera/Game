@@ -824,9 +824,15 @@
       o.vy=softNormal*ny+softTangent*ty;
       const afterSpeed=Math.hypot(o.vx,o.vy);
       const safeSpeed=Math.max(beforeSpeed*.72,baseSpeed()*.45);
-      if(afterSpeed>0&&afterSpeed<safeSpeed){
-        const keep=safeSpeed/afterSpeed;
-        o.vx*=keep;o.vy*=keep;
+      if(afterSpeed<safeSpeed){
+        if(afterSpeed>.001){
+          const keep=safeSpeed/afterSpeed;
+          o.vx*=keep;o.vy*=keep;
+        }else{
+          const direction=vt<0?-1:1;
+          o.vx=tx*safeSpeed*direction;
+          o.vy=ty*safeSpeed*direction;
+        }
       }
       if(isMain){
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};

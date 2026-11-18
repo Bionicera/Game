@@ -794,6 +794,17 @@
       }
       return ringSensor;
     }
+    // 感知入口先做数值隔离：NaN/Infinity 不得进入状态机、ETA 或挡板目标。
+    const finiteVelocity=(v)=>v===undefined||v===null||Number.isFinite(v);
+    if(!Number.isFinite(o.x)||!Number.isFinite(o.y)||!Number.isFinite(o.r)||o.r<=0||
+       !finiteVelocity(o.vx)||!finiteVelocity(o.vy)){
+      ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.previousObject=null;
+      ringSensor.acceleration=0;ringSensor.speed=0;ringSensor.speedRatio=0;
+      ringSensor.speedClass='stopped';ringSensor.speedTrend='stable';
+      ringSensor.nextWall=null;ringSensor.etaInner=null;ringSensor.etaOuter=null;
+      ringSensor.gapEta=null;ringSensor.gapPassable=false;
+      return ringSensor;
+    }
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
     const dx=o.x-cx,dy=o.y-cy,radial=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
     // atan2 返回 [-π,π]，而内环轮廓使用从缺口右侧开始的连续角区间；左下象限需映射到同一轮廓区间。

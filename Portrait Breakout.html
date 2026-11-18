@@ -3755,17 +3755,22 @@
     bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, 'rgb(' + hotRGB + ')');
     ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
     ctx.restore();
-    // 圆环捕手表情：以球心为锚点直接绘制，不加底板或边框。
+    // 圆环捕手表情：以球心为锚点；表情本身保持不透明，不绘制底板。
     if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣')) && ringMood.t>0){
       const mx=ball.x, my=ball.y;
       const alpha=clamp(Math.min(1,ringMood.t/.22),0,1);
-      const faceSize=clamp(ball.r*2.65,18,25);
+      const faceSize=clamp(ball.r*3.15,22,30);
       ctx.save();
+      ctx.globalCompositeOperation='source-over';
       ctx.globalAlpha=alpha;
       ctx.font=faceSize+'px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif';
       ctx.textAlign='center'; ctx.textBaseline='middle';
-      ctx.shadowColor='rgba(135,205,255,.48)';
-      ctx.shadowBlur=5;
+      ctx.fillStyle='#ffffff';
+      ctx.shadowColor='rgba(0,0,0,.72)';
+      ctx.shadowBlur=3;
+      ctx.lineWidth=1.1;
+      ctx.strokeStyle='rgba(8,18,38,.72)';
+      ctx.strokeText(ringMood.face,mx,my);
       ctx.fillText(ringMood.face,mx,my);
       ctx.restore();
     }

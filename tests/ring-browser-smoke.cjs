@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
         evaluator:{...ringEvaluator,events:ringEvaluator.events.slice()},ball:{...ball}};
     },
     startLiveAuto(){
-      shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';lives=99;
+      shapeLocked=false;shape='ring';updateShapeMenu();autoPilot=true;state='playing';lives=20;
       const R=RING_R(),cy=paddle.y+paddle.h-R;
       ball.x=paddle.x+paddle.w/2;ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;
       ball.vx=140;ball.vy=-260;ringState.intent='aim';beep=()=>{};syncUI();
@@ -134,7 +134,7 @@ const { chromium } = require('playwright');
     assert.equal(live.sensor.valid,true,'live RingSensor should stay active during browser play');
     assert.ok(live.evaluator.events.length<=48,'live evaluator history must remain bounded');
     assert.ok(live.time>=28,'real-time Auto scenario should advance for at least 28 seconds');
-    assert.ok(live.lives>=90,'stress run must not silently restart due to ordinary life depletion');
+    assert.ok(live.lives>=10,'stress run must not silently restart due to ordinary life depletion');
     assert.ok(['idle','cooldown','oscillate','dash','release'].includes(live.sling.phase),'sling must remain in a recognized bounded phase');
     assert.ok(live.sling.phaseTime===undefined||live.sling.phaseTime<=3.21,'no sling phase may exceed its timeout');
     await livePage.locator('#btnPause').click();

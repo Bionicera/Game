@@ -694,7 +694,9 @@
     const center={x:pw/2,y:bottom-R};
     const arcHit=(x,y,r,kind)=>{
       const dx=x-center.x,dy=y-center.y,ang=Math.atan2(dy,dx);
-      const a=ang < start ? start : (ang > end ? end : ang);
+      let a=ang;
+      if(a<start) a+=Math.PI*2;
+      if(a>end) a=(a-end <= start+Math.PI*2-a) ? end : start;
       const q={x:center.x+r*Math.cos(a),y:center.y+r*Math.sin(a)};
       const radial={x:Math.cos(a),y:Math.sin(a)};
       const n=kind==='outer'?radial:{x:-radial.x,y:-radial.y};

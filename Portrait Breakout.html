@@ -137,6 +137,7 @@
   /* 第二行：状态区在左，形状图标紧贴提示栏左边 */
   .hud2 .hud-left{flex:0 0 auto;gap:9px}
   .hud-right{display:flex;align-items:center;gap:6px;margin-left:auto;min-width:0}
+  .hud-right .auto-slot{gap:0;flex:0 0 auto}
   .hud-right #uiTip{flex:0 1 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:right}
   .shapes{display:flex;gap:2px;flex:0 0 auto;padding:2px;border-radius:10px;pointer-events:auto;
     background:rgba(16,28,56,.55);border:1px solid rgba(150,190,255,.16);
@@ -191,7 +192,6 @@
     <div class="row">
       <div class="stats"><span class="label">分数</span><b id="uiScore">0</b><span class="best">最高 <i id="uiBest">0</i></span></div>
       <div class="tools">
-        <button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button>
         <button id="btnFull" class="wide" title="全屏" aria-label="切换全屏">全屏</button>
         <button id="btnMusic" title="背景音乐开/关" aria-label="关闭背景音乐" aria-pressed="true">♫</button>
         <button id="btnPause" title="暂停" aria-label="暂停">⏸</button>
@@ -207,6 +207,7 @@
           <button class="shape" data-shape="semicircle" title="半圆形挡板" aria-label="半圆形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M2 31A18 18 0 0 1 38 31Z"/></svg></button>
           <button class="shape" data-shape="triangle" title="等边三角形挡板" aria-label="等边三角形挡板"><svg viewBox="0 0 40 34" aria-hidden="true"><path d="M20 3.3 36 31 4 31Z"/></svg></button>
         </div>
+        <div class="tools auto-slot"><button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button></div>
         <div class="sub" id="uiTip">点球或碰挡板发球</div>
       </div>
     </div>

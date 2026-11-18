@@ -978,6 +978,12 @@
     }
     if(ringSling.phase!=='idle'&&ringSling.focus===focus)
       return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
+    if(sensor.nextWall==='inner'&&sensor.etaInner!==null&&sensor.etaInner<.22&&
+       (sensor.gapEta===null||sensor.etaInner<sensor.gapEta)){
+      const predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);
+      return {skill:'capture',comboName:'unload',targetX:safeTarget(predicted),
+        reason:'内环接触先于缺口窗口，优先软壁捕捉',confidence:.94};
+    }
     if(sensor.gapEta!==null&&sensor.gapEta<.28&&sensor.gapPassable){
       return {skill:'gap-guide',comboName:'unload',targetX:safeTarget(sensor.gapPredictedX),
         reason:'缺口通行条件成立，移动圆环对准通道',confidence:.93,eta:sensor.gapEta};

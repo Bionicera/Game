@@ -603,7 +603,7 @@
       acceleration=acceleration*.68+measured*.32;
     }else if(!ringSensor.valid) acceleration=0;
     const trendLimit=Math.max(22,baseSpeed()*.07);
-    if(dt>1e-4&&ringSensor.valid&&ringSensor.previousObject!==o) acceleration=0;
+    if(ringSensor.valid&&ringSensor.previousObject!==o) acceleration=0;
     const speedTrend=acceleration>trendLimit?'accelerating':acceleration< -trendLimit?'decelerating':'stable';
     const speedClass=speedNow<1?'stopped':ratio<.35?'crawl':ratio<.82?'slow':ratio<1.18?'cruise':ratio<1.65?'fast':'extreme';
     const radialVelocity=radial>1?(vx*dx+vy*dy)/radial:0;

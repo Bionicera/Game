@@ -311,3 +311,20 @@ test('sling aborts cleanly when Auto is disabled or the focus ball changes', () 
   h.updateRingSling(.016,a);
   assert.equal(h.sling.phase,'idle');
 });
+
+
+test('sling oscillation count changes release speed while equal dash distance keeps angle fixed', () => {
+  const make=(cycles)=>{
+    const h=harness();h.auto=true;
+    const o={x:200,y:420,vx:100,vy:0,r:8};
+    h.beginRingSling(o);
+    h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;h.sling.cyclesTarget=cycles;
+    const R=94,cx=200,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+    const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
+    assert.equal(h.tryReleaseRingSling(o,contact,true),true);
+    return {speed:Math.hypot(o.vx,o.vy),angle:h.sling.lastAngle};
+  };
+  const one=make(1),many=make(4);
+  assert.ok(many.speed>one.speed,'more complete oscillations should create a faster sling');
+  assert.ok(Math.abs(many.angle-one.angle)<1e-12,'equal short-dash lengths must produce equal release angles');
+});

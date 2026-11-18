@@ -3724,41 +3724,45 @@
     const fury = clamp((liveMult() - 1) / (FURY_REF - 1), 0, 1);
     const tr = Math.round(140 + 115 * fury), tg = Math.round(225 - 105 * fury), tb = Math.round(255 - 185 * fury);
     const hotRGB = tr + ',' + tg + ',' + tb;
-    // 球拖尾：相邻帧之间按距离补点，极速下也是一条连续光带而非散珠
-    for(let i = 0; i < trail.length; i++){
-      const t = trail[i], a = (i + 1) / trail.length;
-      const rad = ball.r * a * (.85 + .25 * fury);
-      const nxt = trail[i + 1];
-      const segs = nxt ? Math.min(10, Math.ceil(Math.hypot(nxt.x - t.x, nxt.y - t.y) / 7)) : 0;
-      for(let k = 0; k <= segs; k++){
-        const u = segs ? k / segs : 0;
-        const x = nxt ? t.x + (nxt.x - t.x) * u : t.x;
-        const y = nxt ? t.y + (nxt.y - t.y) * u : t.y;
-        const aa = nxt ? a + u / trail.length : a;
-        ctx.fillStyle = 'rgba(' + hotRGB + ',' + (aa * (.28 + .22 * fury)).toFixed(3) + ')';
-        ctx.beginPath(); ctx.arc(x, y, Math.max(1, rad * (nxt ? .6 + .4 * u : 1)), 0, 6.283); ctx.fill();
+    // 圆环模式由表情包替代球体，隐藏主球拖尾；其他模式保留原拖尾。
+    if(shape!=='ring'){
+      for(let i = 0; i < trail.length; i++){
+        const t = trail[i], a = (i + 1) / trail.length;
+        const rad = ball.r * a * (.85 + .25 * fury);
+        const nxt = trail[i + 1];
+        const segs = nxt ? Math.min(10, Math.ceil(Math.hypot(nxt.x - t.x, nxt.y - t.y) / 7)) : 0;
+        for(let k = 0; k <= segs; k++){
+          const u = segs ? k / segs : 0;
+          const x = nxt ? t.x + (nxt.x - t.x) * u : t.x;
+          const y = nxt ? t.y + (nxt.y - t.y) * u : t.y;
+          const aa = nxt ? a + u / trail.length : a;
+          ctx.fillStyle = 'rgba(' + hotRGB + ',' + (aa * (.28 + .22 * fury)).toFixed(3) + ')';
+          ctx.beginPath(); ctx.arc(x, y, Math.max(1, rad * (nxt ? .6 + .4 * u : 1)), 0, 6.283); ctx.fill();
+        }
       }
     }
     // 球：多球时主球略放大并加一圈淡金光环，一眼认出「哪颗掉了才扣血」
     // 只改绘制尺寸，物理半径 ball.r 不变，避免碰撞口径不一致
     const mainDraw = extraBalls.length ? ball.r * 1.18 : ball.r;
-    if(extraBalls.length){
+    if(shape!=='ring'){
+      if(extraBalls.length){
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255,226,150,.8)'; ctx.lineWidth = 1.6;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw + 5 + Math.sin(time * 4) * 1.5, 0, 6.283); ctx.stroke();
+        ctx.setLineDash([]); ctx.restore();
+      }
       ctx.save();
-      ctx.strokeStyle = 'rgba(255,226,150,.8)'; ctx.lineWidth = 1.6;
-      ctx.setLineDash([3, 4]);
-      ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw + 5 + Math.sin(time * 4) * 1.5, 0, 6.283); ctx.stroke();
-      ctx.setLineDash([]); ctx.restore();
-    }
-    ctx.save();
-    ctx.shadowColor = 'rgb(' + hotRGB + ')'; ctx.shadowBlur = 18 + 16 * fury;
-    const bg2 = ctx.createRadialGradient(ball.x - ball.r * .35, ball.y - ball.r * .4, .5, ball.x, ball.y, mainDraw);
-    bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, 'rgb(' + hotRGB + ')');
-    ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
-    ctx.restore();
-    // 圆环捕手表情：以球心为锚点；表情本身保持不透明，不绘制底板。
-    if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣')) && ringMood.t>0){
+      ctx.shadowColor = 'rgb(' + hotRGB + ')'; ctx.shadowBlur = 18 + 16 * fury;
+      const bg2 = ctx.createRadialGradient(ball.x - ball.r * .35, ball.y - ball.r * .4, .5, ball.x, ball.y, mainDraw);
+      bg2.addColorStop(0, '#ffffff'); bg2.addColorStop(1, 'rgb(' + hotRGB + ')');
+      ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
+      ctx.restore();
+    } else {
+      // 圆环模式：表情包就是球的可见外观；ball.x/y/r 和全部物理计算保持原样。
       const mx=ball.x, my=ball.y;
-      const alpha=clamp(Math.min(1,ringMood.t/.22),0,1);
+      const face=ringMood.face || '🤪';
+      const alpha=ringMood.t>0 ? clamp(Math.min(1,ringMood.t/.22),0,1) : 1;
       const faceSize=clamp(ball.r*3.15,22,30);
       ctx.save();
       ctx.globalCompositeOperation='source-over';
@@ -3770,8 +3774,8 @@
       ctx.shadowBlur=3;
       ctx.lineWidth=1.1;
       ctx.strokeStyle='rgba(8,18,38,.72)';
-      ctx.strokeText(ringMood.face,mx,my);
-      ctx.fillText(ringMood.face,mx,my);
+      ctx.strokeText(face,mx,my);
+      ctx.fillText(face,mx,my);
       ctx.restore();
     }
 

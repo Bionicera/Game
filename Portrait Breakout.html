@@ -253,6 +253,14 @@
   // 圆环捕手专属情绪：纯表现层状态，不参与任何碰撞、速度或瞄准计算。
   let ringMood = {face:'🤪',t:0,cooldown:0,streak:0,comboT:0,resumeFlight:false};
   let ringMoodSeed = 0x6d2b79f5;
+  // RingSensor 只读观测状态：不得在感知层修改球的位置、速度或碰撞结果。
+  let ringSensor = {
+    valid:false,speed:0,speedRatio:0,speedClass:'stopped',acceleration:0,speedTrend:'stable',
+    vx:0,vy:0,direction:0,radialDistance:0,radialVelocity:0,angle:Math.PI/2,
+    innerClearance:0,outerClearance:0,radialZone:'inside',
+    gapHalfClearance:0,gapEta:null,gapPredictedX:null,gapOffset:null,gapPassable:false,
+    etaInner:null,etaOuter:null,nextWall:null,kineticIndex:0,updatedAt:0,previousSpeed:null
+  };
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -570,6 +578,62 @@
     const gain=mode==='capture'?.90:1.045;
     return {vx:out.vx*gain,vy:out.vy*gain,mode};
   }
+
+  // 第一阶段感知器：统一测量速度、趋势、圆环相对几何、缺口通行与近似碰撞时间。
+  // 这是观测模型，不是物理模拟；预测值仅供决策参考，真实碰撞仍由 ringContact 负责。
+  function updateRingSensor(dt,o){
+    if(shape!=='ring'||!o){
+      if(shape!=='ring'){
+        ringSensor.valid=false;ringSensor.previousSpeed=null;ringSensor.acceleration=0;
+        ringSensor.speed=0;ringSensor.speedRatio=0;ringSensor.speedClass='stopped';
+      }
+      return ringSensor;
+    }
+    const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
+    const dx=o.x-cx,dy=o.y-cy,radial=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+    const vx=o.vx||0,vy=o.vy||0,speedNow=Math.hypot(vx,vy),ratio=speedNow/Math.max(1,baseSpeed());
+    let acceleration=ringSensor.acceleration||0;
+    if(dt>1e-4&&ringSensor.valid&&Number.isFinite(ringSensor.previousSpeed)){
+      const measured=(speedNow-ringSensor.previousSpeed)/dt;
+      acceleration=acceleration*.68+measured*.32;
+    }else if(!ringSensor.valid) acceleration=0;
+    const trendLimit=Math.max(22,baseSpeed()*.07);
+    const speedTrend=acceleration>trendLimit?'accelerating':acceleration< -trendLimit?'decelerating':'stable';
+    const speedClass=speedNow<1?'stopped':ratio<.35?'crawl':ratio<.82?'slow':ratio<1.18?'cruise':ratio<1.65?'fast':'extreme';
+    const radialVelocity=radial>1?(vx*dx+vy*dy)/radial:0;
+    const innerRadius=ringInnerRadius(angle),innerTarget=Math.max(0,innerRadius-o.r),outerTarget=Math.max(0,R-o.r);
+    const innerClearance=innerTarget-radial,outerClearance=outerTarget-radial;
+    const radialZone=radial<innerTarget?'inside':radial<outerTarget?'wall-band':'outside';
+    let etaInner=null,etaOuter=null;
+    if(radialVelocity>1){
+      if(radial<innerTarget) etaInner=(innerTarget-radial)/radialVelocity;
+      else if(radial<outerTarget) etaOuter=(outerTarget-radial)/radialVelocity;
+    }else if(radialVelocity< -1&&radial>innerTarget){
+      etaInner=(radial-innerTarget)/-radialVelocity;
+    }
+    const throat=R-RING_WALL();
+    const gapHalfClearance=Math.max(0,throat*Math.sin(RING_GAP_HALF())-o.r-.75);
+    const gapY=cy-R-o.r;
+    let gapEta=null,gapPredictedX=null,gapOffset=null,gapPassable=false;
+    if(vy<-.01&&o.y>gapY){
+      gapEta=(gapY-o.y)/vy;
+      gapPredictedX=reflectScreenX(o.x+vx*gapEta,o.r);
+      gapOffset=gapPredictedX-cx;
+      gapPassable=gapHalfClearance>0&&Math.abs(gapOffset)<=gapHalfClearance;
+    }
+    const nextWall=etaInner!==null&&etaOuter!==null
+      ? (etaInner<=etaOuter?'inner':'outer')
+      : etaInner!==null?'inner':etaOuter!==null?'outer':null;
+    ringSensor={
+      valid:true,speed:speedNow,speedRatio:ratio,speedClass,acceleration,speedTrend,
+      vx,vy,direction:Math.atan2(vy,vx),radialDistance:radial,radialVelocity,angle,
+      innerClearance,outerClearance,radialZone,gapHalfClearance,gapEta,gapPredictedX,gapOffset,gapPassable,
+      etaInner,etaOuter,nextWall,kineticIndex:ratio*ratio,
+      updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:speedNow
+    };
+    return ringSensor;
+  }
+
   function reflectScreenX(x,r){
     const lo=2+r,span=Math.max(1,(W-2-r)-lo);
     let m=(x-lo)%(2*span);if(m<0)m+=2*span;
@@ -1086,10 +1150,10 @@
     const value=b=>brickStrategicValue(b,levelType(),snake?snake.cells.length:0);
     const previous=aimPlan;
     let best=null;
-    // Auto 的圆环接球策略按实时球速切换：高速球交给内环软捕捉，
-    // 低速球交给外环硬壁甩球；阈值相对基准发球速度，避免屏幕尺寸影响判断。
+    // Auto 读取统一感知器的速度倍率；1.15 倍阈值暂时保持旧策略，后续由阶段 2 技能决策接管。
+    const sensed=isRing?updateRingSensor(0,focus):null;
     const preferredRingMode=isRing
-      ? (Math.hypot(focus.vx,focus.vy)>=baseSpeed()*1.15?'capture':'attack')
+      ? (sensed.speedRatio>=1.15?'capture':'attack')
       : null;
     const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
     for(let rel=firstRel;rel<=lastRel;rel+=relStep){
@@ -2357,6 +2421,8 @@
   /* ---------- 物理 ---------- */
   function update(dt){
     time += dt;
+    if(shape==='ring') updateRingSensor(dt,ball);
+    else updateRingSensor(0,null);
     if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣' && ringMood.t>0))){
       ringMood.t=Math.max(0,ringMood.t-dt);
       ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);

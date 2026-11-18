@@ -261,6 +261,11 @@
     gapHalfClearance:0,gapEta:null,gapPredictedX:null,gapOffset:null,gapPassable:false,
     etaInner:null,etaOuter:null,nextWall:null,kineticIndex:0,updatedAt:0,previousSpeed:null,previousObject:null
   };
+  // RingState 是决策层：把传感器读数归纳成当前驾驶意图，不直接执行物理动作。
+  let ringState = {
+    valid:false,mode:'attack',priority:'normal',intent:'boost',reason:'等待感知数据',
+    confidence:0,speedClass:'stopped',speedTrend:'stable',risk:0,hold:0,updatedAt:0
+  };
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -598,6 +603,7 @@
       acceleration=acceleration*.68+measured*.32;
     }else if(!ringSensor.valid) acceleration=0;
     const trendLimit=Math.max(22,baseSpeed()*.07);
+    if(dt>1e-4&&ringSensor.valid&&ringSensor.previousObject!==o) acceleration=0;
     const speedTrend=acceleration>trendLimit?'accelerating':acceleration< -trendLimit?'decelerating':'stable';
     const speedClass=speedNow<1?'stopped':ratio<.35?'crawl':ratio<.82?'slow':ratio<1.18?'cruise':ratio<1.65?'fast':'extreme';
     const radialVelocity=radial>1?(vx*dx+vy*dy)/radial:0;
@@ -632,6 +638,66 @@
       updatedAt:ringSensor.updatedAt+(dt>0?dt:0),previousSpeed:dt>1e-4?speedNow:ringSensor.previousSpeed,previousObject:dt>1e-4?o:ringSensor.previousObject
     };
     return ringSensor;
+  }
+
+  // 第二阶段前置决策器：将连续感知量压缩为可解释的驾驶状态。
+  // 高速优先卸力，低速优先外壁增能；中速依据趋势决定，并使用短滞回防止反复切换。
+  function updateRingState(sensor,dt,focus){
+    if(shape!=='ring'||!sensor||!sensor.valid){
+      ringState.valid=false;ringState.hold=0;ringState.reason='圆环感知未就绪';
+      return ringState;
+    }
+    const ratio=sensor.speedRatio,cls=sensor.speedClass,trend=sensor.speedTrend;
+    let desired='attack',priority='normal',intent='boost',reason='低速状态，准备外壁增能',risk=0,confidence=.72;
+    if(cls==='extreme'||ratio>=1.65){
+      desired='capture';priority='critical';intent='unload';
+      reason='极高速：优先内壁卸力';risk=1;confidence=.98;
+    }else if(cls==='fast'||ratio>=1.18){
+      desired='capture';priority='high';intent='control';
+      reason='高速：优先内壁软捕捉';risk=.82;confidence=.92;
+    }else if(cls==='crawl'||cls==='slow'||ratio<.82){
+      desired='attack';priority=cls==='crawl'?'high':'normal';intent='boost';
+      reason=cls==='crawl'?'运动能量偏低：准备外壁加速':'低速：优先外壁攻击与增能';
+      risk=cls==='crawl'?.58:.24;confidence=.88;
+    }else if(trend==='accelerating'){
+      desired='capture';priority='elevated';intent='control';
+      reason='常速但仍在加速：提前准备内壁控速';risk=.62;confidence=.78;
+    }else if(trend==='decelerating'){
+      desired='attack';priority='normal';intent='boost';
+      reason='速度正在下降：准备外壁补能';risk=.28;confidence=.8;
+    }else{
+      desired='attack';priority='normal';intent='aim';
+      reason='常速稳定：保持攻击模型';risk=.16;confidence=.74;
+    }
+    if(sensor.gapEta!==null&&sensor.gapEta<.22&&sensor.gapPassable){
+      intent='guide-through';
+      reason+='；缺口即将通过，保持通道对准';
+      confidence=Math.min(.99,confidence+.06);
+    }
+    if(sensor.nextWall==='inner'&&sensor.etaInner!==null&&sensor.etaInner<.18){
+      priority=priority==='critical'?'critical':'high';
+      reason+='；内壁接触窗口临近';
+    }else if(sensor.nextWall==='outer'&&sensor.etaOuter!==null&&sensor.etaOuter<.18){
+      priority=priority==='critical'?'critical':'high';
+      reason+='；外壁接触窗口临近';
+    }
+    const sameObject=ringState.focus===focus;
+    let hold=Math.max(0,(ringState.hold||0)-Math.max(0,dt||0));
+    let mode=desired;
+    if(ringState.valid&&sameObject&&ringState.mode!==desired&&hold>0&&priority!=='critical'){
+      mode=ringState.mode;
+      reason='策略滞回保护：'+ringState.reason;
+      confidence=Math.min(confidence,ringState.confidence);
+    }else if(ringState.mode!==desired){
+      hold=.22;
+    }
+    ringState={
+      valid:true,mode,priority,intent,reason,confidence,speedClass:cls,speedTrend:trend,
+      risk,hold,focus,updatedAt:ringState.updatedAt+(dt>0?dt:0),
+      speedRatio:ratio,acceleration:sensor.acceleration,gapPassable:sensor.gapPassable,
+      nextWall:sensor.nextWall
+    };
+    return ringState;
   }
 
   function reflectScreenX(x,r){
@@ -1152,9 +1218,8 @@
     let best=null;
     // Auto 读取统一感知器的速度倍率；1.15 倍阈值暂时保持旧策略，后续由阶段 2 技能决策接管。
     const sensed=isRing?updateRingSensor(0,focus):null;
-    const preferredRingMode=isRing
-      ? (sensed.speedRatio>=1.15?'capture':'attack')
-      : null;
+    const decision=isRing?updateRingState(sensed,0,focus):null;
+    const preferredRingMode=isRing?decision.mode:null;
     const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
     for(let rel=firstRel;rel<=lastRel;rel+=relStep){
       if(!isRing&&Math.abs(rel)<.18)continue;
@@ -2421,8 +2486,13 @@
   /* ---------- 物理 ---------- */
   function update(dt){
     time += dt;
-    if(shape==='ring') updateRingSensor(dt,ball);
-    else updateRingSensor(0,null);
+    if(shape==='ring'){
+      const sensed=updateRingSensor(dt,ball);
+      updateRingState(sensed,dt,ball);
+    }else{
+      updateRingSensor(0,null);
+      ringState.valid=false;ringState.hold=0;
+    }
     if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣' && ringMood.t>0))){
       ringMood.t=Math.max(0,ringMood.t-dt);
       ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);

@@ -596,6 +596,9 @@
     }
     const R=RING_R(),cx=paddle.x+paddle.w/2,cy=paddle.y+paddle.h-R;
     const dx=o.x-cx,dy=o.y-cy,radial=Math.hypot(dx,dy),angle=Math.atan2(dy,dx);
+    // atan2 返回 [-π,π]，而内环轮廓使用从缺口右侧开始的连续角区间；左下象限需映射到同一轮廓区间。
+    const innerStart=-Math.PI/2+RING_GAP_HALF();
+    const innerAngle=angle<innerStart?angle+Math.PI*2:angle;
     const vx=o.vx||0,vy=o.vy||0,speedNow=Math.hypot(vx,vy),ratio=speedNow/Math.max(1,baseSpeed());
     let acceleration=ringSensor.acceleration||0;
     if(dt>1e-4&&ringSensor.valid&&ringSensor.previousObject===o&&Number.isFinite(ringSensor.previousSpeed)){
@@ -607,7 +610,7 @@
     const speedTrend=acceleration>trendLimit?'accelerating':acceleration< -trendLimit?'decelerating':'stable';
     const speedClass=speedNow<1?'stopped':ratio<.35?'crawl':ratio<.82?'slow':ratio<1.18?'cruise':ratio<1.65?'fast':'extreme';
     const radialVelocity=radial>1?(vx*dx+vy*dy)/radial:0;
-    const innerRadius=ringInnerRadius(angle),innerTarget=Math.max(0,innerRadius-o.r),outerTarget=Math.max(0,R-o.r);
+    const innerRadius=ringInnerRadius(innerAngle),innerTarget=Math.max(0,innerRadius-o.r),outerTarget=Math.max(0,R-o.r);
     const innerClearance=innerTarget-radial,outerClearance=outerTarget-radial;
     const radialZone=radial<innerTarget?'inside':radial<outerTarget?'wall-band':'outside';
     let etaInner=null,etaOuter=null;
@@ -684,8 +687,11 @@
     const sameObject=ringState.focus===focus;
     let hold=Math.max(0,(ringState.hold||0)-Math.max(0,dt||0));
     let mode=desired;
-    if(ringState.valid&&sameObject&&ringState.mode!==desired&&hold>0&&priority!=='critical'){
+    if(ringState.valid&&sameObject&&ringState.mode!==desired&&hold>0&&priority!=='critical'&&priority!=='high'){
       mode=ringState.mode;
+      // 滞回期间保持与驾驶模式一致的旧意图；缺口即将通过是独立通道任务，允许覆盖。
+      if(intent!=='guide-through') intent=ringState.intent;
+      risk=Math.max(risk,ringState.risk||0);
       reason='策略滞回保护：'+ringState.reason;
       confidence=Math.min(confidence,ringState.confidence);
     }else if(ringState.mode!==desired){

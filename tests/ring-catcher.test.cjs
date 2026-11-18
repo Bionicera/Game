@@ -75,7 +75,7 @@ function harness() {
     globalThis.api={
       updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,planRingSkill,updateRingPlanner,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
-      get sling(){return ringSling},get planner(){return ringPlanner},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},set worldHeight(v){H=v},set aim(v){aimPlan=v},
+      get sling(){return ringSling},get planner(){return ringPlanner},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
@@ -362,7 +362,7 @@ test('RingPlanner prioritizes survival, then gap guidance, capture, boost, and s
   const gap={...base,gapEta:.1,gapPassable:true,gapPredictedX:430};
   assert.equal(h.planRingSkill(gap,{intent:'guide-through'},focus).skill,'gap-guide');
   const danger={...base};
-  const falling={x:400,y:820,vx:0,vy:300,r:8};
+  const falling={x:400,y:520,vx:0,vy:300,r:8};
   assert.equal(h.planRingSkill(danger,{intent:'boost'},falling).skill,'safe-catch');
 });
 

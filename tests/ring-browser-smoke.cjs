@@ -24,9 +24,6 @@ const { chromium } = require('playwright');
       ball.x=paddle.x+paddle.w/2;ball.y=cy+ringInnerRadius(Math.PI/2)-ball.r-2;
       ball.vx=140;ball.vy=-260;ringState.intent='aim';beep=()=>{};syncUI();
     },
-    chooseRing(){
-      shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
-    },
     plannerMatrix(){
       const focus={x:paddle.x+paddle.w/2,y:paddle.y-100,vx:0,vy:120,r:ball.r};
       const base={valid:true,speedRatio:.5,speedClass:'slow',speedTrend:'stable',gapEta:null,

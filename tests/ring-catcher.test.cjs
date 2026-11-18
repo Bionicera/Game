@@ -685,3 +685,40 @@ test('trajectory horizon and simulation work remain bounded for extreme velociti
   assert.ok(result.simulatedTime<=.481,'trajectory must stop at the bounded 480-step budget');
   assert.deepEqual(o,JSON.parse(before),'extreme prediction must not mutate the live ball');
 });
+ 
+test('trajectory predictor rejects malformed physical observations before simulation', () => {
+  const cases=[
+    {x:NaN,y:420,vx:0,vy:10,r:8},
+    {x:200,y:Infinity,vx:0,vy:10,r:8},
+    {x:200,y:420,vx:Infinity,vy:10,r:8},
+    {x:200,y:420,vx:0,vy:10,r:0},
+    {x:200,y:420,vx:0,vy:10,r:-4}
+  ];
+  for(const ball of cases){
+    const h=harness();
+    const result=h.predictRingTrajectory(ball,1.5);
+    assert.equal(result.valid,false);
+    assert.deepEqual(result.events,[]);
+    assert.equal(result.simulatedTime,0);
+  }
+});
+
+test('RingSensor clears stale trajectory and gap observations when focus is absent or invalid', () => {
+  const h=harness();
+  const valid={x:200,y:420,vx:0,vy:-300,r:8};
+  h.updateRingSensor(.016,valid);
+  assert.ok(h.sensor.trajectoryEvents.length>0);
+  assert.notEqual(h.sensor.gapPredictedX,null);
+  const absent=h.updateRingSensor(.016,null);
+  assert.equal(absent.valid,false);
+  assert.deepEqual(absent.trajectoryEvents,[]);
+  assert.equal(absent.gapPredictedX,null);
+  assert.equal(absent.gapOffset,null);
+  const invalid=h.updateRingSensor(.016,{x:NaN,y:420,vx:0,vy:0,r:8});
+  assert.equal(invalid.valid,false);
+  assert.equal(invalid.nextWall,null);
+  assert.equal(invalid.etaInner,null);
+  assert.equal(invalid.etaOuter,null);
+  assert.equal(invalid.gapEta,null);
+  assert.deepEqual(invalid.trajectoryEvents,[]);
+});

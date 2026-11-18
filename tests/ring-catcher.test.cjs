@@ -637,3 +637,51 @@ test('RingSensor wall ETA follows the first trajectory event, not a later straig
   assert.ok(s.etaInner>0);
   assert.equal(s.gapPassable,false);
 });
+
+
+test('RingSensor rejects non-finite ball coordinates, velocity and invalid radius before planning', () => {
+  const cases=[
+    {x:NaN,y:420,vx:0,vy:100,r:8},
+    {x:200,y:Infinity,vx:0,vy:100,r:8},
+    {x:200,y:420,vx:NaN,vy:100,r:8},
+    {x:200,y:420,vx:0,vy:100,r:0}
+  ];
+  for(const ball of cases){
+    const h=harness();
+    const sensor=h.updateRingSensor(.016,ball);
+    assert.equal(sensor.valid,false,'invalid physical input must not enter RingState');
+    assert.equal(h.updateRingState(sensor,.016,ball).valid,false);
+    assert.equal(sensor.nextWall,null);
+    assert.equal(sensor.gapPassable,false);
+  }
+});
+
+test('RingSensor accepts omitted velocity as a stationary but finite observation', () => {
+  const h=harness();
+  const sensor=h.updateRingSensor(.016,{x:200,y:420,r:8});
+  assert.equal(sensor.valid,true);
+  assert.equal(sensor.speed,0);
+  assert.equal(sensor.speedClass,'stopped');
+});
+
+test('sling aborts cleanly when Auto is disabled or the game is paused', () => {
+  const h=harness();h.auto=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h.beginRingSling(focus),true);
+  h.auto=false;
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'idle');
+  h.auto=true;
+  assert.equal(h.beginRingSling(focus),true);
+  h.state='paused';
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'idle');
+});
+
+test('trajectory horizon and simulation work remain bounded for extreme velocities', () => {
+  const h=harness(),o={x:200,y:420,vx:1e9,vy:-1e9,r:8},before=JSON.stringify(o);
+  const result=h.predictRingTrajectory(o,1e6);
+  assert.equal(result.valid,true);
+  assert.ok(result.simulatedTime<=.481,'trajectory must stop at the bounded 480-step budget');
+  assert.deepEqual(o,JSON.parse(before),'extreme prediction must not mutate the live ball');
+});

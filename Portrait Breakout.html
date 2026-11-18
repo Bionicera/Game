@@ -638,6 +638,12 @@
       recordRingEvaluation('cancel',{skill:'sling',reason:'焦点球切换'});
       ringSling.phase='idle';ringSling.focus=null;ringSling.phaseTime=0;
     }
+    if(ringSling.phase!=='idle'&&ringPlanner.skill==='safe-catch'){
+      recordRingEvaluation('cancel',{skill:'sling',reason:'安全接球优先级中断'});
+      ringSling.phase='cooldown';ringSling.cooldown=.45;ringSling.phaseTime=0;ringSling.focus=null;
+      if(ringCombo.name==='sling')ringCombo.index=Math.max(0,ringCombo.steps.length-1);
+      return ringSling;
+    }
     const d=Math.max(0,dt||0);
     if(ringSling.phase!=='idle')ringSling.phaseTime=(ringSling.phaseTime||0)+d;
     const phaseLimit=ringSling.phase==='oscillate'?3.2:ringSling.phase==='dash'?1.05:ringSling.phase==='release'?.48:1.0;
@@ -692,7 +698,7 @@
   // 只在球真实接触「短冲反侧」的刀锋缺口端时释放；短冲距离控制出射角，
   // 震荡完整周期数控制出射速度。没有命中端点就超时取消，不瞬移球心。
   function tryReleaseRingSling(o,contact,isMain){
-    if(!isMain||!autoPilot||ringSling.phase!=='release'||ringSling.focus!==o||!contact||contact.kind!=='inner')return false;
+    if(!isMain||!autoPilot||ringPlanner.skill==='safe-catch'||ringSling.phase!=='release'||ringSling.focus!==o||!contact||contact.kind!=='inner')return false;
     // ringContact 的 q.x 是挡板局部坐标，q.y 保持画布绝对坐标。
     const R=RING_R(),centerX=paddle.w/2,centerY=paddle.y+paddle.h-R;
     const angle=Math.atan2(contact.q.y-centerY,contact.q.x-centerX);
@@ -892,15 +898,15 @@
     const safeTarget=x=>clamp((Number.isFinite(x)?x:center)-paddle.w/2,minX,maxX);
     if(shape!=='ring'||!sensor||!sensor.valid||!focus)
       return {skill:'recover',comboName:'recovery',targetX:safeTarget(center),reason:'感知无效，回到安全中心',confidence:.2};
-    if(ringSling.phase!=='idle'&&ringSling.focus===focus)
-      return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
-    // 预计球将在 0.42 秒内到达底部危险区时，直接放弃攻击/技能，优先接球。
+    // 生存接球必须先于所有进攻技能，包括已经开始的甩球。
     const floorY=paddle.y+paddle.h+focus.r*1.5;
     const floorEta=focus.vy>1?(floorY-focus.y)/focus.vy:Infinity;
     if(floorEta>0&&floorEta<.42){
       const landing=reflectScreenX(focus.x+focus.vx*floorEta,focus.r);
       return {skill:'safe-catch',comboName:'survival',targetX:safeTarget(landing),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
     }
+    if(ringSling.phase!=='idle'&&ringSling.focus===focus)
+      return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
     if(sensor.gapEta!==null&&sensor.gapEta<.28&&sensor.gapPassable){
       return {skill:'gap-guide',comboName:'unload',targetX:safeTarget(sensor.gapPredictedX),
         reason:'缺口通行条件成立，移动圆环对准通道',confidence:.93,eta:sensor.gapEta};
@@ -1821,7 +1827,7 @@
     // 多球时采用带滞回的优先球锁定，避免两颗球 ETA 接近时挡板反复换目标。
     const focus = selectAutoFocusBall();
     const r = focus.r;
-    if(shape==='ring'&&ringSling.phase!=='idle'&&ringSling.focus===focus)
+    if(shape==='ring'&&ringSling.phase!=='idle'&&ringSling.focus===focus&&ringPlanner.skill!=='safe-catch')
       return clamp(ringSling.targetX,2,W-paddle.w-2);
     if(shape==='ring'&&ringPlanner.focus===focus&&['safe-catch','gap-guide','capture','guide'].includes(ringPlanner.skill)&&Number.isFinite(ringPlanner.targetX))
       return clamp(ringPlanner.targetX,2,W-paddle.w-2);

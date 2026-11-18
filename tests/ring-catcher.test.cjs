@@ -75,6 +75,19 @@ function harness() {
   return context.api;
 }
 
+
+test('all production script blocks parse as JavaScript', () => {
+  const blocks = [...html.matchAll(/<script(?:\\s[^>]*)?>([\\s\\S]*?)<\\/script>/gi)];
+  assert.ok(blocks.length>0, 'expected the single-file game script');
+  for (const block of blocks) new vm.Script(block[1]);
+});
+
+test('ring ball still spawns and launches from the inner cavity floor', () => {
+  assert.match(html,/ball\\.y=cy\\+ringInnerRadius\\(Math\\.PI\\/2\\)-ball\\.r-2/);
+  assert.match(html,/ball\\.y=cy\\+ringInnerRadius\\(Math\\.PI\\/2\\)-ball\\.r-1/);
+  assert.match(html,/顶部缺口/);
+});
+
 test('speed classes cover crawl, slow, cruise, fast and extreme', () => {
   const h = harness(), o = {x:200,y:400,vx:0,vy:0,r:8};
   const cases = [[.2,'crawl'],[.5,'slow'],[1,'cruise'],[1.3,'fast'],[1.8,'extreme']];

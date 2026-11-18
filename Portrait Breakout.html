@@ -278,6 +278,8 @@
   // RingEvaluator：有界的本地动作结果统计，不联网、不持久化、不参与物理决策。
   let ringEvaluator = {requested:0,accepted:0,completed:0,cancelled:0,innerContacts:0,outerContacts:0,
     slows:0,boosts:0,guides:0,slingReleases:0,lastSpeed:0,lastSkill:'recover',events:[]};
+  // RingCombo：真实技能组合的有限状态机，阶段推进必须由碰撞/感知事件确认。
+  let ringCombo={name:'idle',steps:[],index:0,focus:null,startedAt:0,reason:'等待技能组合'};
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -653,6 +655,7 @@
         ringSling.halfSwings++;
         if(ringSling.halfSwings>=ringSling.cyclesTarget*2){
           ringSling.phase='dash';ringSling.phaseTime=0;
+          advanceRingCombo('oscillate','左右震荡蓄力完成');
           ringSling.dashStartX=paddle.x;
           const aimX=aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:paddle.x+paddle.w/2;
           const targetOffset=clamp(Math.abs(aimX-(paddle.x+paddle.w/2))/Math.max(1,W*.5),0,1);
@@ -674,6 +677,7 @@
       ringSling.dashProgress=clamp(Math.abs(paddle.x-ringSling.dashStartX)/Math.max(1,ringSling.dashDistance),0,1);
       if(ringSling.dashProgress>=.9||Math.abs(paddle.x-ringSling.targetX)<=5){
         ringSling.phase='release';ringSling.releaseTimer=0;ringSling.phaseTime=0;
+        advanceRingCombo('dash','单向短冲完成');
       }
     }else if(ringSling.phase==='release'){
       ringSling.releaseTimer+=d;
@@ -706,6 +710,7 @@
     ringSling.phase='cooldown';ringSling.cooldown=.72;ringSling.phaseTime=0;ringSling.focus=null;
     recordRingEvaluation('sling',{skill:'sling',before:current,after:launchSpeed});
     recordRingEvaluation('complete',{skill:'sling'});
+    advanceRingCombo('sling-release','反侧缺口端甩出成功');
     ringMoodEvent('🤩',.95);
     beep(680+cycles*55,.07,'triangle',.045);
     return true;
@@ -855,41 +860,65 @@
     if(e.events.length>48)e.events.splice(0,e.events.length-48);
   }
 
+  function startRingCombo(name,focus){
+    const recipes={
+      unload:['capture','slow','guide','gap-guide','attack'],
+      charge:['boost','attack'],
+      control:['guide','gap-guide','attack'],
+      sling:['capture','oscillate','dash','sling-release','attack'],
+      survival:['safe-catch','recover'],
+      recovery:['recover'],
+      attack:['attack']
+    };
+    if(ringCombo.name===name&&ringCombo.focus===focus)return ringCombo;
+    ringCombo={name,steps:(recipes[name]||recipes.recovery).slice(),index:0,focus,
+      startedAt:time||0,reason:'进入 '+name+' 技能组合'};
+    recordRingEvaluation('request',{skill:'combo:'+name});
+    return ringCombo;
+  }
+  function advanceRingCombo(expected,reason){
+    if(!ringCombo.steps.length||ringCombo.steps[ringCombo.index]!==expected)return false;
+    ringCombo.index=Math.min(ringCombo.steps.length-1,ringCombo.index+1);
+    ringCombo.reason=reason||('完成 '+expected);
+    recordRingEvaluation('complete',{skill:'combo:'+expected,reason:ringCombo.reason});
+    return true;
+  }
+
   // RingPlanner 把感知与状态映射为可执行的技能请求；安全接球优先于进攻。
   function planRingSkill(sensor,decision,focus){
     const minX=2,maxX=W-paddle.w-2,center=paddle.x+paddle.w/2;
     const safeTarget=x=>clamp((Number.isFinite(x)?x:center)-paddle.w/2,minX,maxX);
     if(shape!=='ring'||!sensor||!sensor.valid||!focus)
-      return {skill:'recover',targetX:safeTarget(center),reason:'感知无效，回到安全中心',confidence:.2};
+      return {skill:'recover',comboName:'recovery',targetX:safeTarget(center),reason:'感知无效，回到安全中心',confidence:.2};
     if(ringSling.phase!=='idle'&&ringSling.focus===focus)
-      return {skill:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
+      return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
     // 预计球将在 0.42 秒内到达底部危险区时，直接放弃攻击/技能，优先接球。
     const floorY=paddle.y+paddle.h+focus.r*1.5;
     const floorEta=focus.vy>1?(floorY-focus.y)/focus.vy:Infinity;
     if(floorEta>0&&floorEta<.42){
       const landing=reflectScreenX(focus.x+focus.vx*floorEta,focus.r);
-      return {skill:'safe-catch',targetX:safeTarget(landing),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
+      return {skill:'safe-catch',comboName:'survival',targetX:safeTarget(landing),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
     }
     if(sensor.gapEta!==null&&sensor.gapEta<.28&&sensor.gapPassable){
-      return {skill:'gap-guide',targetX:safeTarget(sensor.gapPredictedX),
+      return {skill:'gap-guide',comboName:'unload',targetX:safeTarget(sensor.gapPredictedX),
         reason:'缺口通行条件成立，移动圆环对准通道',confidence:.93,eta:sensor.gapEta};
     }
     if(sensor.speedRatio>=1.18||sensor.speedTrend==='accelerating'&&sensor.speedRatio>=.92){
       let predicted=focus.x;
       if(sensor.etaInner!==null&&sensor.etaInner<.6)
         predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);
-      return {skill:'capture',targetX:safeTarget(predicted),reason:'高速或持续加速，优先内壁卸力',confidence:.88};
+      return {skill:'capture',comboName:'unload',targetX:safeTarget(predicted),reason:'高速或持续加速，优先内壁卸力',confidence:.88};
     }
     if(sensor.speedRatio<.82||sensor.speedTrend==='decelerating'){
-      return {skill:'boost',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
+      return {skill:'boost',comboName:'charge',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
         reason:'能量不足或速度下降，准备外壁硬壁增能',confidence:.82};
     }
     if(sensor.radialZone==='inside'||sensor.radialZone==='wall-band'){
       const steer=sensor.gapPassable&&sensor.gapPredictedX!==null?sensor.gapPredictedX:focus.x;
-      return {skill:'guide',targetX:safeTarget(steer),reason:'球处于环内，微调圆环中心控制球路',confidence:.76};
+      return {skill:'guide',comboName:'control',targetX:safeTarget(steer),reason:'球处于环内，微调圆环中心控制球路',confidence:.76};
     }
     return {skill:decision&&decision.intent==='aim'?'attack':'guide',
-      targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
+      comboName:decision&&decision.intent==='aim'?'attack':'control',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
       reason:'保持目标攻击轨迹',confidence:.7};
   }
 
@@ -901,6 +930,15 @@
       return ringPlanner;
     }
     const plan=planRingSkill(ringSensor,ringState,focus);
+    startRingCombo(plan.comboName||'recovery',focus);
+    if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='slow'&&ringSensor.speedRatio<.95)
+      advanceRingCombo('slow','内环耗能后速度回落，开始导流');
+    if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='guide'&&plan.skill==='gap-guide')
+      advanceRingCombo('guide','缺口进入可通行窗口');
+    if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='gap-guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
+      advanceRingCombo('gap-guide','球已通过逻辑缺口，转入攻击');
+    if(ringCombo.name==='charge'&&ringCombo.steps[ringCombo.index]==='attack'&&ringSensor.speedRatio<.82)
+      ringCombo.reason='外壁增能后继续寻找攻击窗口';
     if(ringPlanner.focus!==focus||ringPlanner.skill!==plan.skill){
       if(ringPlanner.skill!=='recover'&&ringPlanner.skill!=='idle')
         recordRingEvaluation('cancel',{skill:ringPlanner.skill,reason:'技能仲裁切换'});
@@ -911,7 +949,8 @@
       if(plan.skill==='guide'||plan.skill==='gap-guide')
         recordRingEvaluation('guide',{skill:plan.skill});
     }
-    ringPlanner={...plan,focus,phase:plan.skill==='sling'?ringSling.phase:'planned',
+    ringPlanner={...plan,focus,combo:ringCombo.steps.slice(),comboIndex:ringCombo.index,
+      phase:plan.skill==='sling'?ringSling.phase:'planned',
       updatedAt:ringPlanner.updatedAt+Math.max(0,dt||0)};
     return ringPlanner;
   }
@@ -1174,9 +1213,14 @@
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
         ringMoodEvent(ringMoodRandom()<.62?'😏':'🤓',1.25);
         beep(390,.045,'sine',.025);
-        if(isMain)beginRingSling(o);
+        if(isMain&&autoPilot&&ringState.intent==='aim'&&ringPlanner.skill!=='safe-catch'){
+          startRingCombo('sling',o);
+          advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
+          beginRingSling(o);
+        }
       }
       recordRingEvaluation('inner',{skill:'capture',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});
+      if(isMain&&ringCombo.name==='unload')advanceRingCombo('capture','内环软壁完成捕捉与耗能');
     }else{
       // 外环壁是硬攻击面：使用完整挡板反射，再给予有界增益，避免连续加速失控。
       const speedBeforeContact=Math.hypot(o.vx,o.vy);
@@ -1185,6 +1229,7 @@
       const gain=afterReflect>0?Math.min(1.045,speedCap/afterReflect):1;
       o.vx*=gain;o.vy*=gain;
       recordRingEvaluation('outer',{skill:'boost',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});
+      if(isMain&&ringCombo.name==='charge')advanceRingCombo('boost','外环硬壁完成增能');
       if(isMain) ringMoodEvent('🤩',1.2);
     }
     return true;

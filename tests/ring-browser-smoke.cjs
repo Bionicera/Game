@@ -50,7 +50,8 @@ const { chromium } = require('playwright');
       o.x=paddle.x+qx+nx*(o.r-.5);o.y=qy+ny*(o.r-.5);
       o.vx=-nx*220;o.vy=-ny*220;
       updateRingSensor(.016,o);updateRingState(ringSensor,.016,o);
-      ringState.intent='aim';ringPlanner.skill='attack';
+      // Reproduce the production bug: a valid capture while the transient intent is boost.
+      ringState.intent='boost';ringPlanner.skill='capture';
       testSlingBall=o;
       const hit=ringContact(o,o.x,o.y,true,paddle.x,paddle.x);
       return {hit,phase:ringSling.phase,ball:{...o},cycles:ringSling.cyclesTarget};

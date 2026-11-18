@@ -262,13 +262,13 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
   - 预测最大 480 步、时间窗口有界；不修改传入球对象、不消耗随机数。检测到明确首事件时覆盖径向 ETA 近似值；无事件时保留近似值作为回退。
   - 预测仍是静止圆环几何下的规划近似，真实碰撞一律由生产 `ringContact` 执行。
 - 自动化验证：
-  - Node.js 生产函数回归扩展到 51 项，覆盖技能门控、甩球速度/角度解耦、超时、边缘行程、焦点锁、组合状态、Planner 优先级、Evaluator 上限、轨迹首事件、直接缺口通行与特殊关卡隔离。
-  - Chromium smoke 使用真实浏览器引擎启动 Canvas；测试专用桥接驱动生产挡板速度控制函数完成左右震荡与短冲，再通过生产 `ringContact` 验证缺口端释放；另运行 4.5 秒实时 Auto 场景检查球状态有限、传感器持续有效及无未捕获异常。
+  - Node.js 生产函数回归扩展到 52 项，覆盖技能门控、甩球速度/角度解耦、超时、边缘行程、焦点锁、组合状态、Planner 优先级、Evaluator 上限、轨迹首事件、直接缺口通行与特殊关卡隔离。
+  - Chromium smoke 使用真实浏览器引擎启动 Canvas；测试专用桥接驱动生产挡板速度控制函数完成左右震荡与短冲，再通过生产 `ringContact` 验证缺口端释放；另运行 4.5 秒实时 Auto 场景检查球状态有限、传感器持续有效及无未捕获异常。最终 CI：52/52 Node 测试通过，Chromium planner / sling / live Auto smoke 通过（[run 44253947061](https://github.com/Bionicera/Game/actions/runs/44253947061)）。
   - GitHub Actions 使用预装 Playwright/Chromium 镜像，避免每次 CI 重新下载整套浏览器依赖。
 - 未触碰的系统：启动封面、8-bit 音乐、HUD 布局与提示位置、其他四种挡板物理、关卡生成规则；未配置 Pages、未发布游戏。
 - 手机实测：未测试，按约定留到开发侧集中回归全部通过后。
 - 已知边界：Chromium smoke 是短时浏览器自动化，不等于真实手机触控、后台恢复或长时间设备压力测试；轨迹预测不替代真实碰撞。
-- 代码提交：`7df43340ddf82cc6e5b8198f8a4b4dc001dfbd62`（Planner / Evaluator）；`380e9328d23d9f4800b1d17b816eac19f3f1d696`（组合状态机）；`ee4c5fb493473b0da45e1b27868b4e9673eb759b`（紧急接球覆盖）；`04c464f206af753b5fd1b8ff9bd0aea72691ab35`（焦点统一与特殊关隔离）；`79bc52bd20768b153a0790beb24e553b9965a277`（轨迹预测）；`2a38ea7c36bd8a4a752146e512d15fa904ef7a9c`（接入传感器）；`71b68911d606c37b56ebb304d4a469b99f7cc343`（首事件早停优化）。
+- 代码提交：`7df43340ddf82cc6e5b8198f8a4b4dc001dfbd62`（Planner / Evaluator）；`380e9328d23d9f4800b1d17b816eac19f3f1d696`（组合状态机）；`ee4c5fb493473b0da45e1b27868b4e9673eb759b`（紧急接球覆盖）；`04c464f206af753b5fd1b8ff9bd0aea72691ab35`（焦点统一与特殊关隔离）；`79bc52bd20768b153a0790beb24e553b9965a277`（轨迹预测）；`2a38ea7c36bd8a4a752146e512d15fa904ef7a9c`（接入传感器）；`71b68911d606c37b56ebb304d4a469b99f7cc343`（首事件早停优化）；`169a76904914109bb6f2f66018dcce320c279bdd`（首事件 ETA 一致性）；`4191b057cba5cca05c8c64a21900c8e623b17675`（首事件优先级回归）；`56bdffd7c85af788e9c90456f7e9ca8eba6db54a`（实时 Chromium Auto 场景）。
  
 ## 当前阶段与下一步
 

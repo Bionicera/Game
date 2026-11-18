@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'planRingSkill', 'updateRingPlanner', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -53,6 +53,7 @@ function harness() {
       speedTrend: 'stable', previousSpeed: null, previousObject: null, updatedAt: 0
     },
     ringPlanner:{skill:'recover',targetX:null,reason:'',confidence:0,focus:null,phase:'idle',updatedAt:0},
+    ringCombo:{name:'idle',steps:[],index:0,focus:null,startedAt:0,reason:''},
     ringEvaluator:{requested:0,accepted:0,completed:0,cancelled:0,innerContacts:0,outerContacts:0,slows:0,boosts:0,guides:0,slingReleases:0,lastSpeed:0,lastSkill:'recover',events:[]},
     ringState: {
       valid: false, mode: 'attack', priority: 'normal', intent: 'boost',
@@ -73,9 +74,9 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,planRingSkill,updateRingPlanner,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimMode,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
-      get sling(){return ringSling},get planner(){return ringPlanner},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
+      get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
@@ -456,4 +457,31 @@ test('sling release rejects a different ball after focus lock', () => {
   const contact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
   assert.equal(h.tryReleaseRingSling(other,contact,true),false);
   assert.equal(h.tryReleaseRingSling(focus,contact,true),true);
+});
+
+
+test('RingCombo advances only after confirmed capture, slow, guide and gap events', () => {
+  const h=harness(),focus={};
+  h.startRingCombo('unload',focus);
+  assert.deepEqual(Array.from(h.combo.steps),['capture','slow','guide','gap-guide','attack']);
+  assert.equal(h.advanceRingCombo('capture','inner wall hit'),true);
+  assert.equal(h.combo.steps[h.combo.index],'slow');
+  assert.equal(h.advanceRingCombo('guide'),false,'cannot skip an unconfirmed slow phase');
+  assert.equal(h.advanceRingCombo('slow','speed reduced'),true);
+  assert.equal(h.advanceRingCombo('guide','steering aligned'),true);
+  assert.equal(h.advanceRingCombo('gap-guide','ball passed opening'),true);
+  assert.equal(h.combo.steps[h.combo.index],'attack');
+});
+
+test('RingCombo selects charge and sling recipes with the expected skill order', () => {
+  const h=harness(),focus={};
+  h.startRingCombo('charge',focus);
+  assert.deepEqual(Array.from(h.combo.steps),['boost','attack']);
+  h.startRingCombo('sling',focus);
+  assert.deepEqual(Array.from(h.combo.steps),['capture','oscillate','dash','sling-release','attack']);
+  assert.equal(h.advanceRingCombo('capture'),true);
+  assert.equal(h.advanceRingCombo('oscillate'),true);
+  assert.equal(h.advanceRingCombo('dash'),true);
+  assert.equal(h.advanceRingCombo('sling-release'),true);
+  assert.equal(h.combo.steps[h.combo.index],'attack');
 });

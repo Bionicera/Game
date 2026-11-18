@@ -325,7 +325,7 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 ## 当前状态
 
 **当前焦点：圆环捕手已完成第一轮集成，正在进行传感器失效恢复、数值溢出隔离和长时 Chromium Auto 压力回归。**  
-已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 68 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
+已确认的历史 CI 基线仍是 52/52 Node 测试及 Chromium 4.5 秒 smoke（run 44253947061）；后续稳健性提交尚未取得可核验的最新 Actions 结果。当前测试文件包含 69 项 Node 测试，浏览器 smoke 已扩展为 30 秒实时 Auto 加暂停/恢复/重开检查，均待最新 CI 实际执行结果确认。此状态不是手机实测，也不代表长时测试已通过。
 
 
 ### 2026-11-18 · 稳健性加固 · 非有限物理输入与极端预测
@@ -384,3 +384,16 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 下一步：核验本次 Node/Chromium Actions；继续测试从真实捕捉到震荡、短冲、刀锋端释放的完整自动链，以及不同球速/目标方向下的释放成功率。
 - 生产代码 Commit：`f7b4a6fb6fafccbdfc07e562def9403f52070669`。
 - 测试 Commit：`80e7d3ead8eacd31c68f6a05606a54ef3996cc2a`；Chromium 回归 Commit：`ca9e0d23ff44780c1a2ef297948389a4a2344014`。
+
+
+### 2026-11-18 · 高成功率基准回归 · 甩球执行窗口连续性
+- 用户提供对照版本：`Portrait Breakout (5).html`，用户明确反馈该版本甩球成功率较高，作为本轮动作链行为基准。
+- 对比发现：基准版在 `planRingSkill` 中先检查已启动的甩球动作链，再检查普通 0.42 秒落球窗口；当前版把普通 safe-catch 检查提前到活动甩球之前，导致球只要进入较宽的普通 ETA 窗口，就可能把震荡/短冲切换成 survival。随后 `updateRingSling` 会将技能取消并进入冷却。这是当前版相对基准版一个明确的成功率回退来源。
+- 生产修复：活动甩球期间保持 sling 执行窗口连续；仅当落球 ETA 小于 0.16 秒的紧急风险才允许 survival 抢占。甩球 idle 时原有 0.42 秒安全接球阈值不变。真实内环碰撞、真实刀锋端接触释放、阶段超时与物理球轨迹约束均未放宽。
+- 新增回归：活动甩球在普通 0.26 秒落球 ETA 下继续执行；ETA 约 0.10 秒时仍必须由 safe-catch 抢占；甩球 idle 时普通生存窗口仍有效。Node 测试定义总数更新为 69。
+- 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`、本施工总账。
+- 验证状态：生产提交与 Node 测试提交已写入 main；combined status 当前无可见 checks，尚未取得 Actions Job 结果；本轮未在执行环境运行 Node/Chromium，不能宣称通过。
+- 手机实测：未测试，仍按约定留到开发侧验收后。
+- 下一步：继续对照基准版检查震荡计数、短冲到达判定与释放端点容差；重点统计请求、启动、完成、取消各阶段转化率，避免仅靠增加触发频率掩盖失误。
+- 生产 Commit：`5e76580e1184a3c2dae2c6758c43c282b240a94a`。
+- 测试 Commit：`6a7d9d79feec6a6e9dfced7f4fb144aa59aa89ae`。

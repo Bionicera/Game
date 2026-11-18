@@ -1,4 +1,6 @@
-# 彩虹星河 · Rainbow Galaxy
+# Portrait Breakout
+
+## 🌈 第一关：彩虹星河 · Rainbow Galaxy
 
 ## 📱 手机浏览器开发测试
 
@@ -12,7 +14,7 @@
 
 ## 游戏说明
 
-当前仓库包含一个独立 HTML 游戏文件：`Portrait Breakout.html`。游戏使用原生 HTML、CSS 和 Canvas JavaScript 实现，不需要安装依赖或启动构建工具。
+游戏名称为 **Portrait Breakout**，第一关名为 **彩虹星河 · Rainbow Galaxy**。当前仓库包含一个独立 HTML 游戏文件：`Portrait Breakout.html`。游戏使用原生 HTML、CSS 和 Canvas JavaScript 实现，不需要安装依赖或启动构建工具。
 
 - **竖屏优先**：针对手机视口设计，横屏时会显示旋转设备提示。
 - **触屏操作**：在游戏画布上按住并左右滑动，控制挡板；点击画布发球。

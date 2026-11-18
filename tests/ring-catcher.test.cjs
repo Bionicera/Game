@@ -284,7 +284,7 @@ test('sling releases only at the opposite real gap tip; short-dash length contro
   const o={x:200,y:420,vx:100,vy:0,r:8};
   h.beginRingSling(o);
   h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=35;h.sling.cyclesTarget=2;
-  const R=94,cx=200,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
+  const R=94,cx=100,cy=426,gap=Math.asin(24/94),tip=-Math.PI/2+gap;
   const wrong={kind:'inner',q:{x:cx+R*Math.cos(tip+.8),y:cy+R*Math.sin(tip+.8)}};
   assert.equal(h.tryReleaseRingSling(o,wrong,true),false);
   const tipContact={kind:'inner',q:{x:cx+R*Math.cos(tip),y:cy+R*Math.sin(tip)}};
@@ -327,4 +327,21 @@ test('sling oscillation count changes release speed while equal dash distance ke
   const one=make(1),many=make(4);
   assert.ok(many.speed>one.speed,'more complete oscillations should create a faster sling');
   assert.ok(Math.abs(many.angle-one.angle)<1e-12,'equal short-dash lengths must produce equal release angles');
+});
+
+
+test('production ringContact starts sling on inner capture and releases at the real opposite tip', () => {
+  const h=harness();h.auto=true;
+  const p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R),tip=-Math.PI/2+gap;
+  const nx=-Math.cos(tip),ny=-Math.sin(tip);
+  const qx=p.w/2+R*Math.cos(tip),qy=cy+R*Math.sin(tip);
+  const captured={x:p.x+qx+nx*7.5,y:qy+ny*7.5,vx:-nx*220,vy:-ny*220,r:8};
+  assert.equal(h.ringContact(captured,captured.x,captured.y,true,p.x,p.x),true);
+  assert.equal(h.sling.phase,'oscillate','real inner-wall contact should begin the skill for the Auto main ball');
+
+  h.sling.phase='release';h.sling.exitSide=1;h.sling.dashDistance=42;h.sling.cyclesTarget=2;
+  const releaseBall={x:p.x+qx+nx*7.5,y:qy+ny*7.5,vx:-nx*220,vy:-ny*220,r:8};
+  assert.equal(h.ringContact(releaseBall,releaseBall.x,releaseBall.y,true,p.x,p.x),true);
+  assert.ok(releaseBall.vx>0&&releaseBall.vy<0,'the actual production collision should fling through the right-side gap tip');
+  assert.equal(h.sling.phase,'cooldown');
 });

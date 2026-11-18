@@ -1012,15 +1012,19 @@
     const safeTarget=x=>clamp((Number.isFinite(x)?x:center)-paddle.w/2,minX,maxX);
     if(shape!=='ring'||!sensor||!sensor.valid||!focus)
       return {skill:'recover',comboName:'recovery',targetX:safeTarget(center),reason:'感知无效，回到安全中心',confidence:.2};
-    // 生存接球必须先于所有进攻技能，包括已经开始的甩球。
+    // 已开始的甩球动作链获得执行窗口；只有真正紧急的落球风险才能抢占。
+    // 旧基准版在整个甩球阶段保持动作连续，避免普通 ETA 抖动反复打断震荡/短冲。
     const floorY=paddle.y+paddle.h+focus.r*1.5;
     const floorEta=focus.vy>1?(floorY-focus.y)/focus.vy:Infinity;
-    if(floorEta>0&&floorEta<.42){
-      const landing=reflectScreenX(focus.x+focus.vx*floorEta,focus.r);
-      return {skill:'safe-catch',comboName:'survival',targetX:safeTarget(landing),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
+    const landingTarget=()=>safeTarget(reflectScreenX(focus.x+focus.vx*floorEta,focus.r));
+    if(ringSling.phase!=='idle'&&ringSling.focus===focus){
+      if(floorEta>0&&floorEta<.16)
+        return {skill:'safe-catch',comboName:'survival',targetX:landingTarget(),reason:'落球已进入紧急窗口，打断甩球优先生存',confidence:.99,eta:floorEta};
+      return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中，保持动作连续',confidence:.96};
     }
-    if(ringSling.phase!=='idle'&&ringSling.focus===focus)
-      return {skill:'sling',comboName:'sling',targetX:safeTarget(ringSling.targetX+paddle.w/2),reason:'甩球动作链执行中',confidence:.96};
+    if(floorEta>0&&floorEta<.42){
+      return {skill:'safe-catch',comboName:'survival',targetX:landingTarget(),reason:'底部接球窗口临近，优先生存',confidence:.99,eta:floorEta};
+    }
     if(sensor.nextWall==='inner'&&sensor.etaInner!==null&&sensor.etaInner<.22&&
        (sensor.gapEta===null||sensor.etaInner<sensor.gapEta)){
       const predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);

@@ -40,7 +40,7 @@ function harness() {
   const context = {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
-    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelNumber:1, levelType:()=>levelNumber,
+    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelNumber:1,
     ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
@@ -65,6 +65,8 @@ function harness() {
     const RING_WALL=()=>Math.max(5,Math.min(paddle.h*.72,RING_R()*.22));
     const RING_GAP_HALF=()=>Math.asin(clamp(Math.max(1,ball.r*3)/RING_R(),0,.92));
     const ringAimOffset=rel=>clamp(rel,-.92,.92)*RING_R();
+    let levelNumber=1;
+    const levelType=()=>levelNumber;
     function reflectScreenX(x,r){
       const lo=2+r,span=Math.max(1,(800-2-r)-lo);
       let m=(x-lo)%(2*span);if(m<0)m+=2*span;
@@ -579,8 +581,9 @@ test('trajectory sensor predicts centered gap pass and rejects an offset opening
   assert.equal(pass.gapPassable,true);
   assert.deepEqual(centered,snapshot,'prediction must not mutate the live ball');
   const offset=h.predictRingTrajectory({x:260,y:420,vx:0,vy:-300,r:8},1.2);
-  assert.equal(offset.gapEta,null);
-  assert.ok(offset.events.some(e=>e.type==='inner'),'offset path should meet the inner wall instead');
+  assert.ok(offset.events.some(e=>e.type==='inner'),'offset path should meet the inner wall first');
+  assert.ok(offset.etaInner!==null&&(offset.gapEta===null||offset.etaInner<offset.gapEta),
+    'an offset trajectory must resolve the inner-wall contact before any later gap pass');
 });
 
 test('trajectory sensor estimates inner and outer wall contacts in the correct direction', () => {

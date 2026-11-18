@@ -14,7 +14,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<title>彩虹星河 · Rainbow Galaxy</title>
+<title>Portrait Breakout</title>
 <style>
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#070b18;
@@ -159,6 +159,7 @@
   let heartGain = 0;               // 本关已补的心（换关重置，防止一路满血）
   let actx = null;
   let last = 0, time = 0, toast = null;
+  let firstLevelIntroT = 0;       // 第一关标题仅在开场短暂展示，随后淡出
   let bricks = [], rows = 8, cols = 8, area = 0, gap = 3.5, padX = 12, rowCount = 8;
   let paddle = {x:0,y:0,w:90,h:14,targetX:0,vx:0};
   let ball = {x:0,y:0,vx:0,vy:0,r:7};
@@ -1572,7 +1573,8 @@
     // 换关是世界重建边界：统一退役登记表中的旧实体，避免漏掉脱离数组的对象。
     for(const entity of Array.from(entityRegistry.values())) entity.retire();
     divers.length = 0;
-    if(!keepScore){ score = 0; lives = 3; level = 1; dmgScale = 1; }
+    if(!keepScore){ score = 0; lives = 3; level = 1; dmgScale = 1; firstLevelIntroT = 4.8; }
+    else { firstLevelIntroT = 0; }
     area = brickArea();
     // 进关时从「当前累计分」重新起算本关的补心门槛，跳关不白送心
     nextHeartAt = score + heartStep(level);
@@ -1931,6 +1933,8 @@
   /* ---------- 物理 ---------- */
   function update(dt){
     time += dt;
+    if(level === 1 && firstLevelIntroT > 0 && state !== 'paused')
+      firstLevelIntroT = Math.max(0, firstLevelIntroT - dt);
     if((hudTick++ % 6) === 0) syncSpeedHUD();   // 实测倍率连续读数
     // 减速倒计时：暂停时不消耗；归零后按原比例把阻尼冲量撤掉
     if(state !== 'paused' && slowT > 0){
@@ -2882,15 +2886,16 @@
     ctx.save();
     if(shake > .1) ctx.translate((Math.random() - .5) * shake, (Math.random() - .5) * shake);
     // 背景：整屏铺满（多留 20px，震动时不露边）
-    const firstLevelCover = level === 1;
+    const firstLevelStyle = level === 1;
+    const showFirstLevelIntro = firstLevelStyle && firstLevelIntroT > 0;
     const g = ctx.createLinearGradient(0, 0, W * .3, H);
-    if(firstLevelCover){
+    if(firstLevelStyle){
       g.addColorStop(0, '#100d32'); g.addColorStop(.42, '#17245a'); g.addColorStop(1, '#080b20');
     } else {
       g.addColorStop(0, '#080e20'); g.addColorStop(.55, '#0b1430'); g.addColorStop(1, '#0a0a1e');
     }
     ctx.fillStyle = g; ctx.fillRect(-20, -20, W + 40, H + 40);
-    if(firstLevelCover){
+    if(firstLevelStyle){
       const nebula = ctx.createRadialGradient(W*.5, topInset+area*.42, 8, W*.5, topInset+area*.42, W*.78);
       nebula.addColorStop(0, 'rgba(130,90,255,.20)');
       nebula.addColorStop(.48, 'rgba(60,125,255,.10)');
@@ -2904,7 +2909,7 @@
 
     // 缓慢流动网格 + 星点，填充球运动区
     const grid = 46, off = (time * 9) % grid;
-    ctx.strokeStyle = firstLevelCover ? 'rgba(150,185,255,.025)' : 'rgba(130,170,255,.045)'; ctx.lineWidth = 1; ctx.beginPath();
+    ctx.strokeStyle = firstLevelStyle ? 'rgba(150,185,255,.025)' : 'rgba(130,170,255,.045)'; ctx.lineWidth = 1; ctx.beginPath();
     for(let x = -grid + off; x < W + grid; x += grid){ ctx.moveTo(x, 0); ctx.lineTo(x, H); }
     for(let y = -grid + off * .55; y < H + grid; y += grid){ ctx.moveTo(0, y); ctx.lineTo(W, y); }
     ctx.stroke();
@@ -2914,10 +2919,12 @@
       ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, 6.283); ctx.fill();
     }
 
-    if(firstLevelCover){
+    if(showFirstLevelIntro){
       // 第一关封面标题：作为星空背景中的品牌主视觉，不再像 HUD 标签一样占一条横栏。
       // 标题绘制在砖块之前，彩虹弧形经过时会自然叠在文字光效前方。
       ctx.save();
+      // 最后 .9 秒平滑淡出，标题消失后不再占用游戏画面。
+      ctx.globalAlpha = clamp(firstLevelIntroT / .9, 0, 1);
       const titleY = topInset + Math.max(27, Math.min(43, area * .105));
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';

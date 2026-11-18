@@ -740,6 +740,15 @@ test('RingSensor and trajectory predictor reject overflowed derived radial veloc
   assert.equal(predicted.valid,false);
   assert.equal(predicted.simulatedTime,0);
 });
+
+test('RingSensor rejects overflowed gap ETA and reflected gap coordinates', () => {
+  const h=harness();
+  const sensor=h.updateRingSensor(.016,{x:200,y:1e308,vx:0,vy:-.011,r:8});
+  assert.equal(sensor.valid,false);
+  assert.equal(sensor.gapEta,null);
+  assert.equal(sensor.gapPredictedX,null);
+  assert.equal(sensor.gapOffset,null);
+});
  
 test('active sling aborts immediately when RingSensor becomes invalid', () => {
   const h=harness();h.auto=true;h.sensor.valid=true;

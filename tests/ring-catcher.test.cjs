@@ -186,7 +186,7 @@ test('hysteresis keeps mode and intent coherent while high-risk wall windows can
 test('sensor and state production functions do not write ball physics', () => {
   const sensor = extractFunction('updateRingSensor');
   const state = extractFunction('updateRingState');
-  const forbidden = /(?:ball|focus|o)\\.(?:x|y|vx|vy)\\s*=/;
+  const forbidden = /(?:ball|focus|o)\.(?:x|y|vx|vy)\s*=/;
   assert.equal(forbidden.test(sensor), false);
   assert.equal(forbidden.test(state), false);
 });
@@ -201,7 +201,7 @@ test('ring-specific controller is gated away from other paddle shapes', () => {
 
 test('production physics retains soft inner wall and accelerated outer wall', () => {
   const ringContact = extractFunction('ringContact');
-  assert.match(ringContact,/softNormal=-vn\\*\\.28/);
-  assert.match(ringContact,/softTangent=vt\\*\\.94/);
-  assert.match(ringContact,/o\\.vx\\*=1\\.045;o\\.vy\\*=1\\.045/);
+  assert.match(ringContact,/softNormal=-vn\*\.28/);
+  assert.match(ringContact,/softTangent=vt\*\.94/);
+  assert.match(ringContact,/o\.vx\*=1\.045;o\.vy\*=1\.045/);
 });

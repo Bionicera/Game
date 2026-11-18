@@ -212,6 +212,7 @@ RingTuning      有界参数调优：只调策略权重，不直接改物理常�
 ### 自动化测试基础设施
 - 新增 `tests/ring-catcher.test.cjs`：直接提取并执行生产代码中的 RingSensor / RingState / 轮廓函数，不复制一套假实现。
 - 新增 `.github/workflows/ring-catcher-tests.yml`：修改游戏主文件或测试文件时自动运行 Node.js 回归测试；另支持手动触发。
+- 新增 `tests/ring-browser-smoke.cjs` 与 Chromium CI job：在真实浏览器引擎中启动 Canvas，使用测试专用只读/驱动桥接执行生产 `ringContact`，验证内环接球启动震荡状态、反侧缺口端释放及浏览器无未捕获异常；该检查不是手机设备测试。
 - 覆盖速度等级、加速度趋势、焦点切换、缺口中心/偏移/方向、极端数值、状态选择、滞回、壁面风险、轮廓角度跨界、形状隔离、真实 ringContact 内软壁耗能、外硬壁反射增能、缺口无碰撞穿越、出生位置与完整脚本语法。
 - 语法检查与自动化逻辑测试不等于浏览器渲染、真实碰撞长时间运行或手机实测；这些仍分开验收。
 

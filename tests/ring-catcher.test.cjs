@@ -295,9 +295,10 @@ test('sling releases only at the opposite real gap tip; short-dash length contro
   assert.equal(h.sling.phase,'cooldown');
   assert.ok(o.vy<0&&o.vx>0,'release should launch upward through the selected right-side opening');
   const shortAngle=h.sling.lastAngle;
-  const h2=harness();h2.auto=true;h2.beginRingSling({x:200,y:420,vx:100,vy:0,r:8});
-  h2.sling.phase='release';h2.sling.exitSide=1;h2.sling.dashDistance=65;h2.sling.cyclesTarget=2;
+  const h2=harness();h2.auto=true;
   const o2={x:200,y:420,vx:100,vy:0,r:8};
+  h2.beginRingSling(o2);
+  h2.sling.phase='release';h2.sling.exitSide=1;h2.sling.dashDistance=65;h2.sling.cyclesTarget=2;
   assert.equal(h2.tryReleaseRingSling(o2,tipContact,true),true);
   assert.ok(h2.sling.lastAngle>shortAngle,'longer dash should produce a wider release angle');
   assert.ok(Math.hypot(o2.vx,o2.vy)>Math.hypot(o.vx,o.vy)*.99);

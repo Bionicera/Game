@@ -2315,20 +2315,20 @@
   /* ---------- 物理 ---------- */
   function update(dt){
     time += dt;
-    if(shape==='ring' && state==='playing'){
+    if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣' && ringMood.t>0))){
       ringMood.t=Math.max(0,ringMood.t-dt);
       ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);
       ringMood.comboT=Math.max(0,ringMood.comboT-dt);
       if(ringMood.comboT===0) ringMood.streak=0;
       // 飞行表情按概率抽取：🤪最常见，偶尔😂或😣，只影响视觉。
-      if(ringMood.t===0 && ringMood.cooldown===0){
+      if(state==='playing' && ringMood.t===0 && ringMood.cooldown===0){
         const roll=Math.random();
         ringMood.face=roll<.72?'🤪':(roll<.86?'😂':'😣');
         ringMood.t=.9+Math.random()*.45;
         ringMood.cooldown=1.7+Math.random()*2.1;
       }
       // 球高速下坠且偏离圆环中心时，偶尔露出惊险表情。
-      if(ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
+      if(state==='playing' && ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
          Math.abs(ball.x-(paddle.x+paddle.w/2))>paddle.w*.43 &&
          ringMood.cooldown===0 && Math.random()<.12){
         ringMoodEvent('😱',.85);
@@ -3707,7 +3707,7 @@
     ctx.fillStyle = bg2; ctx.beginPath(); ctx.arc(ball.x, ball.y, mainDraw, 0, 6.283); ctx.fill();
     ctx.restore();
     // 圆环捕手表情贴纸：浮在主球旁边，短暂淡入淡出，不遮挡球心与拖尾。
-    if(shape==='ring' && state==='playing' && ringMood.t>0){
+    if(shape==='ring' && (state==='playing' || (state==='serving' && ringMood.face==='😣')) && ringMood.t>0){
       const mx=clamp(ball.x+ball.r*1.15,15,W-15), my=clamp(ball.y-ball.r*1.25,15,H-15);
       const alpha=clamp(Math.min(1,ringMood.t/.22),0,1);
       ctx.save();

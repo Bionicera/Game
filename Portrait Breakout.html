@@ -552,7 +552,12 @@
     const R=RING_R(),off=ringAimOffset(rel);
     if(ringAimMode(rel,r)==='capture'){
       const ri=R-RING_WALL(),a=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
-      return {x:-Math.cos(a),y:-Math.sin(a)};
+      const rr=ringInnerRadius(a),dr=ringInnerRadiusSlope(a);
+      const tx=dr*Math.cos(a)-rr*Math.sin(a),ty=dr*Math.sin(a)+rr*Math.cos(a);
+      const tl=Math.hypot(tx,ty)||1;
+      let nx=-ty/tl,ny=tx/tl;
+      if(nx*Math.cos(a)+ny*Math.sin(a)>0){nx=-nx;ny=-ny;}
+      return {x:nx,y:ny};
     }
     const a=-Math.PI/2+Math.asin(clamp(off/(R+r),-.92,.92));
     return {x:Math.cos(a),y:Math.sin(a)};
@@ -567,15 +572,33 @@
     let m=(x-lo)%(2*span);if(m<0)m+=2*span;
     return lo+(m<=span?m:2*span-m);
   }
-  // 内环不是完美圆：三组不同频率、不同相位的浅起伏，避免左右镜像与周期性共振。
-  // 起伏幅度保持克制，先从约 4% 半径以内开始，后续根据实测手感迭代。
+  // 缺口两端像刀锋一样收尖：内壁逐渐贴近外壁，主体壁厚与中段波纹保持原样。
+  // taper 只作用于实体壁厚，不改变缺口角度；因此通道决策仍只需判断最窄喉部。
+  function ringTipTaper(a){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+    const span=Math.max(.045,gap*1.5),d=Math.max(0,Math.min(a-start,end-a));
+    const t=clamp(d/span,0,1);
+    return t*t*(3-2*t);
+  }
+  function ringTipTaperSlope(a){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+    const span=Math.max(.045,gap*1.5),left=a-start,right=end-a;
+    const d=Math.max(0,Math.min(left,right));
+    if(d<=0||d>=span)return 0;
+    const t=d/span,sign=left<right?1:-1;
+    return 6*t*(1-t)*sign/span;
+  }
+  // 内环继续保留非对称起伏；起伏与壁厚一起收敛，避免刀尖处出现数值倒刺。
   function ringInnerRadius(a){
-    const R=RING_R(), base=R-RING_WALL();
-    return base + R*(.026*Math.sin(3*a+.42)+.014*Math.sin(5*a-1.13)+.009*Math.sin(2*a+2.07));
+    const R=RING_R(),taper=ringTipTaper(a);
+    const ripple=R*(.026*Math.sin(3*a+.42)+.014*Math.sin(5*a-1.13)+.009*Math.sin(2*a+2.07));
+    return R-taper*(RING_WALL()-ripple);
   }
   function ringInnerRadiusSlope(a){
-    const R=RING_R();
-    return R*(.078*Math.cos(3*a+.42)+.070*Math.cos(5*a-1.13)+.018*Math.cos(2*a+2.07));
+    const R=RING_R(),taper=ringTipTaper(a),dt=ringTipTaperSlope(a);
+    const ripple=R*(.026*Math.sin(3*a+.42)+.014*Math.sin(5*a-1.13)+.009*Math.sin(2*a+2.07));
+    const rippleSlope=R*(.078*Math.cos(3*a+.42)+.070*Math.cos(5*a-1.13)+.018*Math.cos(2*a+2.07));
+    return -dt*(RING_WALL()-ripple)+taper*rippleSlope;
   }
   function shapeBodyH(){
     if(shape === 'triangle') return TRI_H();

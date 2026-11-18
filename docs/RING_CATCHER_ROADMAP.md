@@ -390,7 +390,7 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 用户提供对照版本：`Portrait Breakout (5).html`，用户明确反馈该版本甩球成功率较高，作为本轮动作链行为基准。
 - 对比发现：基准版在 `planRingSkill` 中先检查已启动的甩球动作链，再检查普通 0.42 秒落球窗口；当前版把普通 safe-catch 检查提前到活动甩球之前，导致球只要进入较宽的普通 ETA 窗口，就可能把震荡/短冲切换成 survival。随后 `updateRingSling` 会将技能取消并进入冷却。这是当前版相对基准版一个明确的成功率回退来源。
 - 生产修复：活动甩球期间保持 sling 执行窗口连续；仅当落球 ETA 小于 0.16 秒的紧急风险才允许 survival 抢占。甩球 idle 时原有 0.42 秒安全接球阈值不变。真实内环碰撞、真实刀锋端接触释放、阶段超时与物理球轨迹约束均未放宽。
-- 新增回归：活动甩球在普通 0.26 秒落球 ETA 下继续执行；ETA 约 0.10 秒时仍必须由 safe-catch 抢占；甩球 idle 时普通生存窗口仍有效。Node 测试定义总数更新为 69。
+- 新增回归：活动甩球在普通 0.26 秒落球 ETA 下继续执行；ETA 约 0.10 秒时仍必须由 safe-catch 抢占；甩球 idle 时普通生存窗口仍有效。
 - 改动文件：`Portrait Breakout.html`、`tests/ring-catcher.test.cjs`、本施工总账。
 - 验证状态：生产提交与 Node 测试提交已写入 main；combined status 当前无可见 checks，尚未取得 Actions Job 结果；本轮未在执行环境运行 Node/Chromium，不能宣称通过。
 - 手机实测：未测试，仍按约定留到开发侧验收后。
@@ -402,14 +402,20 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 ### 2026-11-18 · CI 反馈修正 · 跨 VM 空数组断言
 - Actions 核验：生产修复提交 `5e76580e` 对应 Node Job 失败、Chromium smoke Job 成功；测试提交 `6a7d9d79` 对应 Node Job 失败、Chromium smoke Job 仍在运行。
 - 失败原因：Node 测试中两处对 VM 沙箱返回的空数组直接使用 `assert.deepEqual(array, [])`，Node 将不同 realm 的数组原型视为不相等。日志显示两项均为结构相同的空数组；与游戏生产逻辑无关。其余已执行测试通过，包括本轮新增的“活动甩球保持动作窗口/紧急落球仍抢占”测试。
-- 修复：改为断言 `length === 0`，避免跨 realm 原型差异；当前 Node 测试定义为 69 项。
+- 修复：改为断言 `length === 0`，避免跨 realm 原型差异；Actions 已确认 Node 运行 67 项全部通过。
 - 新 CI run：`44258310323`（提交 `2f0f701f`），状态 queued，等待 Node 与 Chromium Job 实际结果。
 - 相关运行：[run 44258115350](https://github.com/Bionicera/Game/actions/runs/44258115350)、[run 44258167304](https://github.com/Bionicera/Game/actions/runs/44258167304)、[run 44258310323](https://github.com/Bionicera/Game/actions/runs/44258310323)。
 - 测试修复 Commit：`2f0f701fcfeb0db1e4b91237118d29b2988fa575`。
 
 
 ### 2026-11-18 · CI 第二轮诊断 · 补齐第三处跨 VM 数组断言
-- 新一轮 Node Job 已确认前两处空数组断言修正生效；69 项中 66 项通过，剩余 1 项仍因同类跨 VM 数组原型差异失败，位置为传感器非法输入分支的 `invalid.trajectoryEvents` 空数组断言。
+- 中间一轮 Node Job 已确认前两处空数组断言修正生效；67 项中 66 项通过，剩余 1 项仍因同类跨 VM 数组原型差异失败，位置为传感器非法输入分支的 `invalid.trajectoryEvents` 空数组断言。随后已修复该第三处断言，最新 Node Job 67/67 全部通过。
 - 修复：将第三处断言也改为检查数组长度为 0，不改变生产代码。
 - 最新提交：`a6fe4eeb1f9656ad297e7334b4e57157b939132e`；对应 Actions run `44258425078` 已排队，等待复验。
 - 当前不能宣称 Node 全绿；前一轮 Chromium smoke 已成功，最新一轮 Browser Job 结果仍待确认。
+
+
+### 2026-11-18 · CI 验证更新 · Node 全绿
+- 最新提交 `a6fe4eeb1f9656ad297e7334b4e57157b939132e` 对应 Actions run `44258425078` 的 Node Job 已完成：67/67 通过，0 失败。
+- 本轮 Node 失败均定位为跨 VM realm 空数组原型比较；三处断言均改为长度检查后全绿。甩球动作连续性新测试通过。
+- 同一 run 的 Chromium 30 秒实时 Auto smoke 仍在执行，尚未取得最终结论；不可提前记为全套 CI 通过。

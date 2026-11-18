@@ -27,7 +27,7 @@ const { chromium } = require('playwright');
       const guide=planRingSkill({...base,speedRatio:1,speedClass:'cruise',radialZone:'inside'},{intent:'aim'},focus).skill;
       const danger={...focus,y:paddle.y+paddle.h-30,vy:200};
       const safe=planRingSkill(base,{intent:'boost'},danger).skill;
-      const trajectory=predictRingTrajectory({x:paddle.x+paddle.w/2,y:420,vx:0,vy:-300,r:ball.r},1.2);
+      const trajectory=predictRingTrajectory({x:paddle.x+paddle.w/2,y:paddle.y+paddle.h-RING_R()+10,vx:0,vy:-300,r:ball.r},1.2);
       return {boost,capture,gap,guide,safe,trajectory:trajectory.events.some(e=>e.type==='gap')};
     },
     chooseRing(){

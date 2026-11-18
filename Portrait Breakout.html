@@ -930,12 +930,29 @@
       return ringPlanner;
     }
     const plan=planRingSkill(ringSensor,ringState,focus);
-    startRingCombo(plan.comboName||'recovery',focus);
+    const nextCombo=plan.comboName||'recovery';
+    const comboRank={recovery:0,attack:0,control:1,charge:2,unload:3,sling:4,survival:5};
+    const sameComboFocus=ringCombo.focus===focus;
+    const comboFinished=ringCombo.steps.length>0&&ringCombo.index>=ringCombo.steps.length-1;
+    const shouldSwitch=!sameComboFocus||ringCombo.name==='idle'||comboFinished&&nextCombo!==ringCombo.name||
+      nextCombo==='survival'&&ringCombo.name!=='survival'||
+      nextCombo==='sling'&&ringCombo.name!=='sling'||
+      (ringCombo.name==='survival'&&nextCombo!=='survival')||
+      (comboRank[nextCombo]||0)>(comboRank[ringCombo.name]||0);
+    if(shouldSwitch)startRingCombo(nextCombo,focus);
     if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='slow'&&ringSensor.speedRatio<.95)
       advanceRingCombo('slow','内环耗能后速度回落，开始导流');
     if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='guide'&&plan.skill==='gap-guide')
       advanceRingCombo('guide','缺口进入可通行窗口');
     if(ringCombo.name==='unload'&&ringCombo.steps[ringCombo.index]==='gap-guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
+      advanceRingCombo('gap-guide','球已通过逻辑缺口，转入攻击');
+    if(ringCombo.name==='control'&&plan.skill==='gap-guide'&&ringCombo.steps[ringCombo.index]==='guide')
+      advanceRingCombo('guide','缺口进入可通行窗口');
+    if(ringCombo.name==='control'&&plan.skill==='attack'&&ringCombo.steps[ringCombo.index]!=='attack'){
+      if(ringCombo.steps[ringCombo.index]==='guide')advanceRingCombo('guide','导流结束，切入攻击');
+      if(ringCombo.steps[ringCombo.index]==='gap-guide')advanceRingCombo('gap-guide','通道阶段结束，切入攻击');
+    }
+    if(ringCombo.name==='control'&&ringCombo.steps[ringCombo.index]==='gap-guide'&&ringSensor.gapEta===null&&ringSensor.radialZone==='outside')
       advanceRingCombo('gap-guide','球已通过逻辑缺口，转入攻击');
     if(ringCombo.name==='charge'&&ringCombo.steps[ringCombo.index]==='attack'&&ringSensor.speedRatio<.82)
       ringCombo.reason='外壁增能后继续寻找攻击窗口';
@@ -1215,8 +1232,7 @@
         beep(390,.045,'sine',.025);
         if(isMain&&autoPilot&&ringState.intent==='aim'&&ringPlanner.skill!=='safe-catch'){
           startRingCombo('sling',o);
-          advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
-          beginRingSling(o);
+          if(beginRingSling(o))advanceRingCombo('capture','内环捕捉完成，进入震荡蓄力');
         }
       }
       recordRingEvaluation('inner',{skill:'capture',before:speedBeforeContact,after:Math.hypot(o.vx,o.vy)});

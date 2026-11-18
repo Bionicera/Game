@@ -693,6 +693,10 @@
     const pw=paddle.w, bottom=paddle.y+paddle.h, R=RING_R(), inner=R-RING_WALL();
     const gap=RING_GAP_HALF(), start=-Math.PI/2+gap, end=3*Math.PI/2-gap;
     const center={x:pw/2,y:bottom-R};
+    // 内环两侧设置略微错位的圆润导向凸点，打破高速左右往返的对称轨迹。
+    const bumpers=[{a:32,r:Math.max(4.5,ball.r*.88)},{a:148,r:Math.max(4.5,ball.r*.76)}]
+      .map(b=>({...b,cx:center.x+Math.cos(b.a*Math.PI/180)*(inner-b.r*.46),
+                       cy:center.y+Math.sin(b.a*Math.PI/180)*(inner-b.r*.46)}));
     const arcHit=(x,y,r,kind)=>{
       const dx=x-center.x,dy=y-center.y,ang=Math.atan2(dy,dx);
       let a=ang;
@@ -704,13 +708,18 @@
       const ox=x-q.x,oy=y-q.y;
       return {q,n,dist:Math.hypot(ox,oy),signed:ox*n.x+oy*n.y,kind};
     };
+    const bumpHit=(x,y,b)=>{
+      const dx=x-b.cx,dy=y-b.cy,d=Math.hypot(dx,dy)||1,n={x:dx/d,y:dy/d};
+      const q={x:b.cx+n.x*b.r,y:b.cy+n.y*b.r},ox=x-q.x,oy=y-q.y;
+      return {q,n,dist:Math.hypot(ox,oy),signed:ox*n.x+oy*n.y,kind:'bump'};
+    };
     const travel=Math.hypot((o.x-prevX)-(paddleEndX-paddleStartX),o.y-prevY);
     const steps=clamp(Math.ceil(travel/Math.max(1,o.r*.4)),1,256);
     let contact=null;
     for(let k=0;k<=steps;k++){
       const f=k/steps,px=paddleStartX+(paddleEndX-paddleStartX)*f;
       const cx=prevX+(o.x-prevX)*f-px,cy=prevY+(o.y-prevY)*f;
-      const hits=[arcHit(cx,cy,R,'outer'),arcHit(cx,cy,inner,'inner')];
+      const hits=[arcHit(cx,cy,R,'outer'),arcHit(cx,cy,inner,'inner'),...bumpers.map(b=>bumpHit(cx,cy,b))];
       for(const hit of hits){
         const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y<-.01;
         if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching&&(!contact||hit.dist<contact.dist)) contact={...hit,f};
@@ -2080,7 +2089,7 @@
     snapBall();                 // 立刻按新形状重新摆放球
     trail.length = 0; hitFx = null;
     syncUI();
-    toastMsg(({rect:'圆角矩形挡板', moon:'新月形挡板', semicircle:'半圆形挡板', triangle:'等边三角形挡板', ring:'U 型圆环挡板'})[next]);
+    toastMsg(({rect:'圆角矩形挡板', moon:'新月形挡板', semicircle:'半圆形挡板', triangle:'等边三角形挡板', ring:'圆环捕手'})[next]);
     beep(620, .07, 'triangle', .05);
   });
 
@@ -3600,7 +3609,18 @@
     } else if(shape === 'ring'){
       ctx.save(); ctx.strokeStyle='rgba(255,255,255,.72)'; ctx.lineWidth=1.5;
       ctx.beginPath(); const R=RING_R(),ri=R-RING_WALL(),cy=bottom-R,gap=RING_GAP_HALF();
-      ctx.arc(pcx,cy,ri,-Math.PI/2+gap,3*Math.PI/2-gap,false); ctx.stroke(); ctx.restore();
+      ctx.arc(pcx,cy,ri,-Math.PI/2+gap,3*Math.PI/2-gap,false); ctx.stroke();
+      // 两枚浅蓝圆润凸点与碰撞体同位，右侧略大、左侧略低，视觉上易于辨认。
+      const brs=[{a:32,r:Math.max(4.5,ball.r*.88)},{a:148,r:Math.max(4.5,ball.r*.76)}];
+      for(const b of brs){
+        const bx=pcx+Math.cos(b.a*Math.PI/180)*(ri-b.r*.46);
+        const by=cy+Math.sin(b.a*Math.PI/180)*(ri-b.r*.46);
+        ctx.fillStyle='rgba(178,231,255,.96)'; ctx.shadowColor='#8bd8ff'; ctx.shadowBlur=7;
+        ctx.beginPath(); ctx.arc(bx,by,b.r,0,Math.PI*2); ctx.fill();
+        ctx.shadowBlur=0; ctx.strokeStyle='rgba(255,255,255,.82)'; ctx.lineWidth=1;
+        ctx.stroke();
+      }
+      ctx.restore();
     } else {
       ctx.fillStyle = 'rgba(255,255,255,.6)';
       ctx.beginPath(); ctx.arc(pcx, topY + 3, 2.2, 0, 6.283); ctx.fill();

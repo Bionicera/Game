@@ -842,18 +842,19 @@
   function recordRingEvaluation(type,detail){
     if(shape!=='ring')return;
     const d=detail||{},e=ringEvaluator;
-    if(type==='request')e.requested++;
-    else if(type==='accept')e.accepted++;
-    else if(type==='complete')e.completed++;
-    else if(type==='cancel')e.cancelled++;
+    const bump=k=>{e[k]=Math.min(1000000,(e[k]||0)+1);};
+    if(type==='request')bump('requested');
+    else if(type==='accept')bump('accepted');
+    else if(type==='complete')bump('completed');
+    else if(type==='cancel')bump('cancelled');
     else if(type==='inner'){
-      e.innerContacts++;
-      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after<d.before*.985)e.slows++;
+      bump('innerContacts');
+      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after<d.before*.985)bump('slows');
     }else if(type==='outer'){
-      e.outerContacts++;
-      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after>d.before*1.005)e.boosts++;
-    }else if(type==='guide')e.guides++;
-    else if(type==='sling')e.slingReleases++;
+      bump('outerContacts');
+      if(Number.isFinite(d.before)&&Number.isFinite(d.after)&&d.after>d.before*1.005)bump('boosts');
+    }else if(type==='guide')bump('guides');
+    else if(type==='sling')bump('slingReleases');
     e.lastSkill=d.skill||e.lastSkill;
     if(Number.isFinite(d.after))e.lastSpeed=d.after;
     e.events.push({type,skill:d.skill||null,before:Number.isFinite(d.before)?d.before:null,
@@ -932,6 +933,12 @@
       return ringPlanner;
     }
     const plan=planRingSkill(ringSensor,ringState,focus);
+    const ttl=plan.skill==='safe-catch'?.14:plan.skill==='sling'?.22:plan.skill==='gap-guide'?.28:.42;
+    plan.accepted=plan.skill!=='recover';
+    plan.action={type:plan.skill==='capture'||plan.skill==='slow'?'soft-capture':
+      plan.skill==='boost'?'hard-wall-boost':plan.skill==='sling'?'sling-state-machine':
+      plan.skill==='attack'?'aim-attack':'translate-ring',targetX:plan.targetX};
+    plan.expiresAt=(time||0)+ttl;
     const nextCombo=plan.comboName||'recovery';
     const comboRank={recovery:0,attack:0,control:1,charge:2,unload:3,sling:4,survival:5};
     const sameComboFocus=ringCombo.focus===focus;

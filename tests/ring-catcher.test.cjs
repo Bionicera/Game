@@ -147,6 +147,16 @@ test('wall contact windows raise priority', () => {
   assert.equal(h.updateRingState(sensor,0,focus).priority,'high');
 });
 
+
+test('sensor normalizes negative lower-half angles onto the continuous inner contour', () => {
+  const h = harness(), cx=200, cy=426, radius=42;
+  const left = {x:cx+radius*Math.cos(-2.5),y:cy+radius*Math.sin(-2.5),vx:0,vy:0,r:8};
+  const rightEquivalent = {x:cx+radius*Math.cos(-2.5+Math.PI*2),y:cy+radius*Math.sin(-2.5+Math.PI*2),vx:0,vy:0,r:8};
+  const a = h.updateRingSensor(0,left).innerClearance;
+  const b = h.updateRingSensor(0,rightEquivalent).innerClearance;
+  assert.ok(Math.abs(a-b)<1e-8, 'equivalent angles must use the same wall contour');
+});
+
 test('inner contour and taper remain finite and smooth at gap tips', () => {
   const h = harness();
   for (let i=0;i<=720;i++) {
@@ -156,6 +166,21 @@ test('inner contour and taper remain finite and smooth at gap tips', () => {
     assert.ok(Number.isFinite(h.ringInnerRadiusSlope(a)));
     assert.ok(h.ringTipTaper(a)>=0 && h.ringTipTaper(a)<=1);
   }
+});
+
+
+test('hysteresis keeps mode and intent coherent while high-risk wall windows can override it', () => {
+  const h = harness(), focus = {};
+  const sensor = {valid:true,speedRatio:1.8,speedClass:'extreme',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
+  h.updateRingState(sensor,0,focus);
+  sensor.speedRatio=.5;sensor.speedClass='slow';
+  const held = h.updateRingState(sensor,.01,focus);
+  assert.equal(held.mode,'capture');
+  assert.equal(held.intent,'unload');
+  sensor.nextWall='outer';sensor.etaOuter=.05;
+  const urgent = h.updateRingState(sensor,.01,focus);
+  assert.equal(urgent.mode,'attack');
+  assert.equal(urgent.priority,'high');
 });
 
 test('sensor and state production functions do not write ball physics', () => {

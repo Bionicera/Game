@@ -151,10 +151,9 @@ test('wall contact windows raise priority', () => {
 test('sensor normalizes negative lower-half angles onto the continuous inner contour', () => {
   const h = harness(), cx=200, cy=426, radius=42;
   const left = {x:cx+radius*Math.cos(-2.5),y:cy+radius*Math.sin(-2.5),vx:0,vy:0,r:8};
-  const rightEquivalent = {x:cx+radius*Math.cos(-2.5+Math.PI*2),y:cy+radius*Math.sin(-2.5+Math.PI*2),vx:0,vy:0,r:8};
-  const a = h.updateRingSensor(0,left).innerClearance;
-  const b = h.updateRingSensor(0,rightEquivalent).innerClearance;
-  assert.ok(Math.abs(a-b)<1e-8, 'equivalent angles must use the same wall contour');
+  const actual = h.updateRingSensor(0,left).innerClearance;
+  const expected = h.ringInnerRadius(-2.5+Math.PI*2)-8-radius;
+  assert.ok(Math.abs(actual-expected)<1e-8, 'negative atan2 angle must map to the continuous contour interval');
 });
 
 test('inner contour and taper remain finite and smooth at gap tips', () => {

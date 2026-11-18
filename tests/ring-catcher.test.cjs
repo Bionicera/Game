@@ -619,3 +619,11 @@ test('sling prerequisites reject special levels without leaving an active action
   assert.equal(h.beginRingSling(o),false);
   assert.equal(h.sling.phase,'idle');
 });
+
+
+test('RingPlanner handles imminent inner-wall collision before a later gap opportunity', () => {
+  const h=harness(),focus={x:260,y:420,vx:0,vy:-300,r:8};
+  const sensor={valid:true,speedRatio:1.3,speedClass:'fast',speedTrend:'stable',
+    gapEta:.3,gapPassable:true,gapPredictedX:200,etaInner:.08,etaOuter:null,nextWall:'inner',radialZone:'wall-band'};
+  assert.equal(h.planRingSkill(sensor,{intent:'guide-through'},focus).skill,'capture');
+});

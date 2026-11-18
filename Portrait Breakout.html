@@ -252,6 +252,7 @@
   let ball = {x:0,y:0,vx:0,vy:0,r:7};
   // 圆环捕手专属情绪：纯表现层状态，不参与任何碰撞、速度或瞄准计算。
   let ringMood = {face:'🤪',t:0,cooldown:0,streak:0,comboT:0};
+  let ringMoodSeed = 0x6d2b79f5;
   let trail = [], particles = [], stars = [];
   let waves = [], floaters = [], shake = 0;   // 冲击波 / 飘分 / 屏幕震动
   let falling = [], hitCooldown = 0;         // 自由落体的砖块 / 被砸后的短暂无敌
@@ -823,7 +824,7 @@
       o.vy=softNormal*ny+softTangent*ty;
       if(isMain){
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
-        ringMoodEvent(Math.random()<.62?'😏':'🤓',1.25);
+        ringMoodEvent(ringMoodRandom()<.62?'😏':'🤓',1.25);
         beep(390,.045,'sine',.025);
       }
     }else{
@@ -1992,6 +1993,11 @@
   function toastMsg(t){ toast = {text:t, t:3.5}; }
 
   // 只在圆环挡板启用时触发；随机情绪只改变贴纸，不改变游戏规则。
+  function ringMoodRandom(){
+    // 独立伪随机序列，避免表情抽签消耗游戏物理/关卡共用的 Math.random()。
+    ringMoodSeed=(Math.imul(ringMoodSeed,1664525)+1013904223)>>>0;
+    return ringMoodSeed/4294967296;
+  }
   function ringMoodEvent(face,duration){
     if(shape!=='ring') return;
     ringMood.face=face;
@@ -2320,18 +2326,18 @@
       ringMood.cooldown=Math.max(0,ringMood.cooldown-dt);
       ringMood.comboT=Math.max(0,ringMood.comboT-dt);
       if(ringMood.comboT===0) ringMood.streak=0;
+      // 球高速下坠且偏离圆环中心时，先抽取一次险些失误事件。
+      if(state==='playing' && ringMood.t===0 && ringMood.cooldown===0 &&
+         ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
+         Math.abs(ball.x-(paddle.x+paddle.w/2))>paddle.w*.43 && ringMoodRandom()<.12){
+        ringMoodEvent('😱',.85);
+      }
       // 飞行表情按概率抽取：🤪最常见，偶尔😂或😣，只影响视觉。
       if(state==='playing' && ringMood.t===0 && ringMood.cooldown===0){
-        const roll=Math.random();
+        const roll=ringMoodRandom();
         ringMood.face=roll<.72?'🤪':(roll<.86?'😂':'😣');
-        ringMood.t=.9+Math.random()*.45;
-        ringMood.cooldown=1.7+Math.random()*2.1;
-      }
-      // 球高速下坠且偏离圆环中心时，偶尔露出惊险表情。
-      if(state==='playing' && ball.vy>0 && ball.y>H-Math.max(86,ball.r*11) &&
-         Math.abs(ball.x-(paddle.x+paddle.w/2))>paddle.w*.43 &&
-         ringMood.cooldown===0 && Math.random()<.12){
-        ringMoodEvent('😱',.85);
+        ringMood.t=.9+ringMoodRandom()*.45;
+        ringMood.cooldown=1.7+ringMoodRandom()*2.1;
       }
     } else if(state!=='paused'){
       ringMood.t=0;

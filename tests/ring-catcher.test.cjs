@@ -842,3 +842,30 @@ test('inner capture does not start sling during survival preemption or an existi
   assert.equal(cooldown.hit(),true);
   assert.equal(cooldown.h.sling.phase,'cooldown','a capture must not overwrite an active cooldown');
 });
+
+test('RingSling dash progress counts only travel in the commanded direction', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  h.sling.phase='dash';h.sling.focus=focus;h.sling.dashDir=1;
+  h.sling.dashStartX=100;h.sling.targetX=140;h.sling.dashDistance=40;
+  h.paddle.x=60;
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.dashProgress,0,'moving 40px opposite the dash must not count as progress');
+  assert.equal(h.sling.phase,'dash','opposite movement must not enter release');
+  h.paddle.x=138;
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.dashProgress,.95);
+  assert.equal(h.sling.phase,'release','90% forward travel should complete the dash');
+});
+
+test('RingSling cancels a dash whose clamped target has no forward travel', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  h.sling.phase='oscillate';h.sling.focus=focus;h.sling.cyclesTarget=1;
+  h.sling.halfSwings=1;h.sling.anchorX=790;h.sling.amplitude=20;
+  h.sling.dashDir=1;h.sling.phaseTime=0;
+  h.paddle.x=598;h.paddle.w=200;h.W=800;
+  h.updateRingSling(.016,focus);
+  assert.equal(h.sling.phase,'cooldown','a boundary-clamped zero-length dash must cancel');
+  assert.equal(h.sling.abortReason,'边界行程不足');
+});

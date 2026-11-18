@@ -49,6 +49,7 @@ const { chromium } = require('playwright');
       const o=ball;
       o.x=paddle.x+qx+nx*(o.r-.5);o.y=qy+ny*(o.r-.5);
       o.vx=-nx*220;o.vy=-ny*220;
+      updateRingSensor(.016,o);updateRingState(ringSensor,.016,o);
       ringState.intent='aim';ringPlanner.skill='attack';
       testSlingBall=o;
       const hit=ringContact(o,o.x,o.y,true,paddle.x,paddle.x);

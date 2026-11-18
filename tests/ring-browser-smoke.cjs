@@ -19,7 +19,7 @@ const { chromium } = require('playwright');
     },
     chooseRing(){
       shapeLocked=false;shape='ring';updateShapeMenu();snapBall();
-      autoPilot=true;state='playing';beep=()=>{};
+      autoPilot=true;state='playing';ringState.intent='aim';ringPlanner.skill='attack';beep=()=>{};
     },
     innerCapture(){
       const R=RING_R(),cy=paddle.y+paddle.h-R,a=0;

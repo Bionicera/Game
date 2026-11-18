@@ -673,7 +673,7 @@ test('sling aborts cleanly when Auto is disabled or the game is paused', () => {
   assert.equal(h.sling.phase,'idle');
   h.auto=true;
   assert.equal(h.beginRingSling(focus),true);
-  h.state='paused';
+  h.shape='rect';
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'idle');
 });

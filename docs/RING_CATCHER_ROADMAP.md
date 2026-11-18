@@ -397,3 +397,12 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - 下一步：继续对照基准版检查震荡计数、短冲到达判定与释放端点容差；重点统计请求、启动、完成、取消各阶段转化率，避免仅靠增加触发频率掩盖失误。
 - 生产 Commit：`5e76580e1184a3c2dae2c6758c43c282b240a94a`。
 - 测试 Commit：`6a7d9d79feec6a6e9dfced7f4fb144aa59aa89ae`。
+
+
+### 2026-11-18 · CI 反馈修正 · 跨 VM 空数组断言
+- Actions 核验：生产修复提交 `5e76580e` 对应 Node Job 失败、Chromium smoke Job 成功；测试提交 `6a7d9d79` 对应 Node Job 失败、Chromium smoke Job 仍在运行。
+- 失败原因：Node 测试中两处对 VM 沙箱返回的空数组直接使用 `assert.deepEqual(array, [])`，Node 将不同 realm 的数组原型视为不相等。日志显示两项均为结构相同的空数组；与游戏生产逻辑无关。其余已执行测试通过，包括本轮新增的“活动甩球保持动作窗口/紧急落球仍抢占”测试。
+- 修复：改为断言 `length === 0`，避免跨 realm 原型差异；当前 Node 测试定义为 69 项。
+- 新 CI run：`44258310323`（提交 `2f0f701f`），状态 queued，等待 Node 与 Chromium Job 实际结果。
+- 相关运行：[run 44258115350](https://github.com/Bionicera/Game/actions/runs/44258115350)、[run 44258167304](https://github.com/Bionicera/Game/actions/runs/44258167304)、[run 44258310323](https://github.com/Bionicera/Game/actions/runs/44258310323)。
+- 测试修复 Commit：`2f0f701fcfeb0db1e4b91237118d29b2988fa575`。

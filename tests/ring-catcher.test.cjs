@@ -40,7 +40,7 @@ function harness() {
   const context = {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
-    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelType:()=>1,
+    shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelNumber:1, levelType:()=>levelNumber,
     ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
@@ -77,7 +77,7 @@ function harness() {
       predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
-      set shape(v){shape=v},get shape(){return shape}
+      set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
     };
   `, context);
   return context.api;
@@ -607,4 +607,12 @@ test('trajectory prediction never mutates ball state or consumes random values',
   h.predictRingTrajectory(o,1.5);
   assert.equal(JSON.stringify(o),before);
   assert.equal(Math.random,random);
+});
+
+
+test('sling prerequisites reject special levels without leaving an active action', () => {
+  const h=harness();h.auto=true;h.level=2;
+  const o={x:200,y:420,vx:100,vy:0,r:8};
+  assert.equal(h.beginRingSling(o),false);
+  assert.equal(h.sling.phase,'idle');
 });

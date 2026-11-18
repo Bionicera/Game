@@ -115,6 +115,8 @@
   .tools button.auto{padding:0 6px;font-size:10px;font-weight:800;letter-spacing:.2px}
   .tools button.auto.on{color:#041a24;border-color:rgba(150,255,220,.85);
     background:linear-gradient(135deg,#7ff0c0,#5bc8ff);box-shadow:0 0 13px rgba(100,235,190,.5)}
+  #btnMusic{color:#a9f1ff;font-size:18px;text-shadow:0 0 9px rgba(100,220,255,.65)}
+  #btnMusic[aria-pressed='false']{color:#8190aa;text-shadow:none}
   .tools button.auto.on::after{content:'';position:absolute;right:3px;top:3px;width:5px;height:5px;
     border-radius:50%;background:#041a24;opacity:.65}
   @media (max-width:340px){
@@ -191,6 +193,7 @@
       <div class="tools">
         <button id="btnAuto" class="wide auto" title="挡板自动驾驶" aria-label="挡板自动驾驶" aria-pressed="false">Auto</button>
         <button id="btnFull" class="wide" title="全屏" aria-label="切换全屏">全屏</button>
+        <button id="btnMusic" title="背景音乐开/关" aria-label="关闭背景音乐" aria-pressed="true">♫</button>
         <button id="btnPause" title="暂停" aria-label="暂停">⏸</button>
         <button id="btnReset" title="重开" aria-label="重新开始">↻</button>
       </div>
@@ -1810,6 +1813,7 @@
       state = 'paused';
     }
     syncUI();
+    syncMusicPause();
   }
   function toastMsg(t){ toast = {text:t, t:1.7}; }
 
@@ -1826,6 +1830,129 @@
       o.start(); o.stop(actx.currentTime + (d || .06));
     }catch(e){}
   }
+
+  /* ---------- 原创 8-bit 战斗循环：四轨 MIDI 式编曲 ---------- */
+  const MUSIC_BPM = 156, MUSIC_STEP = 60 / MUSIC_BPM / 4, MUSIC_STEPS = 64;
+  let musicEnabled = true, musicStarted = false, musicTimer = null;
+  let musicMaster = null, musicComp = null, musicNextTime = 0, musicStep = 0;
+  const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
+  const musicBars = [
+    {root:40, chord:[52,55,59], lead:[76,0,79,83,81,0,79,76,74,76,79,0,83,81,79,0]},
+    {root:36, chord:[48,52,55], lead:[72,0,76,79,81,0,79,76,72,74,76,0,79,76,74,0]},
+    {root:43, chord:[55,59,62], lead:[79,0,83,86,84,0,83,79,78,79,83,0,86,84,83,0]},
+    {root:38, chord:[50,54,57], lead:[74,0,78,81,83,0,81,78,74,78,81,0,86,83,81,0]}
+  ];
+  function musicTone(note, at, duration, wave, volume, detune){
+    if(!musicMaster || note == null) return;
+    const osc = actx.createOscillator(), amp = actx.createGain();
+    osc.type = wave; osc.frequency.setValueAtTime(midiHz(note), at);
+    if(detune) osc.detune.setValueAtTime(detune, at);
+    const peak = Math.max(.0001, volume);
+    amp.gain.setValueAtTime(.0001, at);
+    amp.gain.exponentialRampToValueAtTime(peak, at + .008);
+    amp.gain.setValueAtTime(peak * .78, at + Math.max(.018, duration * .55));
+    amp.gain.exponentialRampToValueAtTime(.0001, at + duration);
+    osc.connect(amp); amp.connect(musicMaster);
+    osc.start(at); osc.stop(at + duration + .015);
+  }
+  function musicKick(at){
+    const o=actx.createOscillator(), g=actx.createGain();
+    o.type='sine'; o.frequency.setValueAtTime(125,at); o.frequency.exponentialRampToValueAtTime(43,at+.13);
+    g.gain.setValueAtTime(.34,at); g.gain.exponentialRampToValueAtTime(.0001,at+.16);
+    o.connect(g); g.connect(musicMaster); o.start(at); o.stop(at+.17);
+  }
+  function musicNoise(at, duration, volume, bright){
+    const length=Math.ceil(actx.sampleRate*duration), buffer=actx.createBuffer(1,length,actx.sampleRate);
+    const data=buffer.getChannelData(0);
+    for(let i=0;i<length;i++) data[i]=(Math.random()*2-1)*(1-i/length);
+    const src=actx.createBufferSource(), filter=actx.createBiquadFilter(), g=actx.createGain();
+    src.buffer=buffer; filter.type='highpass'; filter.frequency.setValueAtTime(bright?6200:1450,at);
+    g.gain.setValueAtTime(volume,at); g.gain.exponentialRampToValueAtTime(.0001,at+duration);
+    src.connect(filter); filter.connect(g); g.connect(musicMaster); src.start(at); src.stop(at+duration);
+  }
+  function scheduleMusicStep(step, at){
+    const barIndex=Math.floor(step/16), beatStep=step%16, bar=musicBars[barIndex];
+    // 主旋律：方波短音，四小节动机逐层推进
+    const lead=bar.lead[beatStep];
+    if(lead) musicTone(lead,at,MUSIC_STEP*.82,'square',.105);
+    // 亮色副旋律：每隔八分音符回应主旋律，形成双声部
+    if(beatStep%2===1 && [3,7,11,15].includes(beatStep)){
+      const answer=bar.chord[(beatStep===15?2:1)] + 12;
+      musicTone(answer,at,MUSIC_STEP*.58,'square',.035,5);
+    }
+    // 三角波低音：根音、五度与八度交替，锁定推进感
+    if(beatStep%4===0){
+      const bass=bar.root + (beatStep===8?7:0);
+      musicTone(bass,at,MUSIC_STEP*3.65,'triangle',.19);
+      musicTone(bass+12,at,MUSIC_STEP*1.45,'triangle',.055);
+    }
+    // 高频琶音：每拍切换和弦音，给中频增加持续运动
+    if(beatStep%2===0){
+      const arp=bar.chord[(beatStep/2)%3]+12;
+      musicTone(arp,at,MUSIC_STEP*.72,'square',.038,-7);
+    }
+    // 电子鼓：四拍底鼓、二四拍军鼓、八分踩镲；末小节加过门
+    if(beatStep===0 || beatStep===8) musicKick(at);
+    if(beatStep===4 || beatStep===12) musicNoise(at,.105,.105,false);
+    if(beatStep%2===0) musicNoise(at,.035,beatStep%4===0?.045:.026,true);
+    if(barIndex===3 && beatStep>=12 && beatStep%2===0) musicNoise(at,.055,.075,true);
+  }
+  function musicScheduler(){
+    if(!musicStarted || !musicEnabled || !actx || actx.state!=='running') return;
+    const horizon=actx.currentTime+.18;
+    while(musicNextTime<horizon){
+      scheduleMusicStep(musicStep,musicNextTime);
+      musicNextTime+=MUSIC_STEP;
+      musicStep=(musicStep+1)%MUSIC_STEPS;
+    }
+  }
+  function startBattleMusic(){
+    try{
+      if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+      if(actx.state==='suspended') actx.resume();
+      if(!musicMaster){
+        musicComp=actx.createDynamicsCompressor();
+        musicComp.threshold.value=-18; musicComp.knee.value=12; musicComp.ratio.value=4;
+        musicComp.attack.value=.004; musicComp.release.value=.16;
+        musicMaster=actx.createGain(); musicMaster.gain.value=0;
+        musicMaster.connect(musicComp); musicComp.connect(actx.destination);
+      }
+      musicEnabled=true;
+      $('btnMusic').textContent='♫'; $('btnMusic').setAttribute('aria-pressed','true');
+      $('btnMusic').setAttribute('aria-label','关闭背景音乐');
+      musicMaster.gain.cancelScheduledValues(actx.currentTime);
+      musicMaster.gain.setTargetAtTime(state==='paused'?0:.72,actx.currentTime,.045);
+      if(!musicStarted){
+        musicStarted=true; musicNextTime=actx.currentTime+.055; musicStep=0;
+        musicTimer=setInterval(musicScheduler,25);
+      }
+    }catch(e){}
+  }
+  function toggleMusic(){
+    if(!musicStarted || !musicMaster){ startBattleMusic(); return; }
+    musicEnabled=!musicEnabled;
+    $('btnMusic').textContent=musicEnabled?'♫':'♪';
+    $('btnMusic').setAttribute('aria-pressed',musicEnabled?'true':'false');
+    $('btnMusic').setAttribute('aria-label',musicEnabled?'关闭背景音乐':'开启背景音乐');
+    if(musicEnabled){
+      if(actx.state==='suspended') actx.resume();
+      musicMaster.gain.setTargetAtTime(state==='paused'?0:.72,actx.currentTime,.045);
+    }else{
+      musicMaster.gain.setTargetAtTime(0,actx.currentTime,.035);
+    }
+  }
+  function syncMusicPause(){
+    if(musicMaster && musicEnabled && actx){
+      musicMaster.gain.setTargetAtTime(state==='paused'?0:.72,actx.currentTime,.06);
+    }
+  }
+  // 移动浏览器禁止无交互自动发声：封面照常自动淡出，音乐在玩家首次触摸/按键后解锁。
+  document.addEventListener('pointerdown', e=>{
+    if(e.target && e.target.id==='btnMusic') return;
+    if(!musicStarted) startBattleMusic();
+  },{capture:true,passive:true});
+  document.addEventListener('keydown',()=>{if(!musicStarted) startBattleMusic();},{capture:true});
+  $('btnMusic').addEventListener('click',toggleMusic);
 
   /* ---------- 交互 ---------- */
   function movePaddle(clientX){

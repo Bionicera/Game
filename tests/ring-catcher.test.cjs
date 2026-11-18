@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -74,7 +74,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set shape(v){shape=v},get shape(){return shape}
@@ -566,4 +566,45 @@ test('ring skills and sling do not override special-level Auto routing', () => {
   assert.match(extractFunction('beginRingSling'),/levelType\(\)!==1/);
   assert.match(extractFunction('updateRingSling'),/levelType\(\)!==1/);
   assert.match(extractFunction('autoTargetX'),/levelType\(\)===1/);
+});
+
+
+test('trajectory sensor predicts centered gap pass and rejects an offset opening', () => {
+  const h=harness();
+  const centered={x:200,y:420,vx:0,vy:-300,r:8};
+  const snapshot={...centered};
+  const pass=h.predictRingTrajectory(centered,1.2);
+  assert.equal(pass.valid,true);
+  assert.ok(pass.events.some(e=>e.type==='gap'));
+  assert.equal(pass.gapPassable,true);
+  assert.deepEqual(centered,snapshot,'prediction must not mutate the live ball');
+  const offset=h.predictRingTrajectory({x:260,y:420,vx:0,vy:-300,r:8},1.2);
+  assert.equal(offset.gapEta,null);
+  assert.ok(offset.events.some(e=>e.type==='inner'),'offset path should meet the inner wall instead');
+});
+
+test('trajectory sensor estimates inner and outer wall contacts in the correct direction', () => {
+  const h=harness();
+  const inner=h.predictRingTrajectory({x:200,y:426,vx:360,vy:0,r:8},.8);
+  assert.ok(inner.etaInner!==null&&inner.etaInner>0);
+  const outer=h.predictRingTrajectory({x:310,y:426,vx:-360,vy:0,r:8},.8);
+  assert.ok(outer.etaOuter!==null&&outer.etaOuter>0);
+  assert.ok(outer.etaOuter<inner.etaInner,'outer contact from outside should occur earlier');
+});
+
+test('RingSensor prefers confirmed trajectory events over radial-only ETA estimates', () => {
+  const h=harness(),o={x:200,y:420,vx:0,vy:-300,r:8};
+  const s=h.updateRingSensor(.016,o);
+  assert.ok(Array.isArray(s.trajectoryEvents));
+  assert.ok(s.trajectoryEvents.some(e=>e.type==='gap'));
+  assert.ok(s.gapEta>0&&s.gapPassable);
+  assert.ok(s.trajectoryTime>0);
+});
+
+test('trajectory prediction never mutates ball state or consumes random values', () => {
+  const h=harness(),o={x:200,y:426,vx:360,vy:0,r:8},before=JSON.stringify(o);
+  const random=Math.random;
+  h.predictRingTrajectory(o,1.5);
+  assert.equal(JSON.stringify(o),before);
+  assert.equal(Math.random,random);
 });

@@ -747,7 +747,9 @@
       const dx=x-cx,dy=y-cy,radial=Math.hypot(dx,dy)||1,angle=Math.atan2(dy,dx);
       const inGap=angleGap(angle);
       if(vy<0&&y<=cy-R-r&&inGap&&Math.abs(dx)<=clearHalf){
-        gapEta=elapsed;gapPredictedX=x;gapPassable=clearHalf>0;
+        gapEta=elapsed;gapPredictedX=x;
+        // 只有当前连续轨迹直接穿过缺口才算可通行；先撞壁再绕回来的路径不冒充直通。
+        gapPassable=clearHalf>0&&!events.some(e=>e.type==='inner'||e.type==='outer');
         addEvent('gap',elapsed,x,y);break;
       }
       const start=-Math.PI/2+gap;

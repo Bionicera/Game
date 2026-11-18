@@ -1834,7 +1834,7 @@
   /* ---------- 原创 8-bit 战斗循环：重编曲与温和响度 ---------- */
   const MUSIC_BPM = 144, MUSIC_STEP = 60 / MUSIC_BPM / 4, MUSIC_STEPS = 64;
   let musicEnabled = true, musicStarted = false, musicTimer = null;
-  let musicMaster = null, musicComp = null, musicFilter = null, musicNextTime = 0, musicStep = 0;
+  let musicMaster = null, musicComp = null, musicFilter = null, musicMakeup = null, musicNextTime = 0, musicStep = 0;
   const midiHz = n => 440 * Math.pow(2, (n - 69) / 12);
   // E minor / C / G / D：主旋律采用长短句、切分与不同小节的变奏
   const musicBars = [
@@ -1918,6 +1918,13 @@
       musicStep=(musicStep+1)%MUSIC_STEPS;
     }
   }
+  // 统一音乐电平：平滑淡入淡出，避免开关/暂停时突然跳响度
+  const MUSIC_OUTPUT_LEVEL = .30;
+  function setMusicLevel(level, timeConstant){
+    if(!musicMaster || !actx) return;
+    musicMaster.gain.cancelScheduledValues(actx.currentTime);
+    musicMaster.gain.setTargetAtTime(level,actx.currentTime,timeConstant||.22);
+  }
   function startBattleMusic(){
     try{
       if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
@@ -1927,16 +1934,17 @@
         musicFilter=actx.createBiquadFilter(); musicFilter.type='lowpass';
         musicFilter.frequency.value=4800; musicFilter.Q.value=.3;
         musicComp=actx.createDynamicsCompressor();
-        musicComp.threshold.value=-26; musicComp.knee.value=24; musicComp.ratio.value=4.2;
-        musicComp.attack.value=.018; musicComp.release.value=.3;
+        musicComp.threshold.value=-24; musicComp.knee.value=22; musicComp.ratio.value=4.5;
+        musicComp.attack.value=.012; musicComp.release.value=.26;
+        musicMakeup=actx.createGain(); musicMakeup.gain.value=1.25;
         musicMaster=actx.createGain(); musicMaster.gain.value=0;
-        musicMaster.connect(musicFilter); musicFilter.connect(musicComp); musicComp.connect(actx.destination);
+        musicMaster.connect(musicFilter); musicFilter.connect(musicComp);
+        musicComp.connect(musicMakeup); musicMakeup.connect(actx.destination);
       }
       musicEnabled=true;
       $('btnMusic').textContent='♫'; $('btnMusic').setAttribute('aria-pressed','true');
       $('btnMusic').setAttribute('aria-label','关闭背景音乐');
-      musicMaster.gain.cancelScheduledValues(actx.currentTime);
-      musicMaster.gain.setTargetAtTime(state==='paused'?0:.19,actx.currentTime,.32);
+      setMusicLevel(state==='paused'?0:MUSIC_OUTPUT_LEVEL,.28);
       if(!musicStarted){
         musicStarted=true; musicNextTime=actx.currentTime+.08; musicStep=0;
         musicTimer=setInterval(musicScheduler,25);
@@ -1951,14 +1959,14 @@
     $('btnMusic').setAttribute('aria-label',musicEnabled?'关闭背景音乐':'开启背景音乐');
     if(musicEnabled){
       if(actx.state==='suspended') actx.resume();
-      musicMaster.gain.setTargetAtTime(state==='paused'?0:.24,actx.currentTime,.32);
+      setMusicLevel(state==='paused'?0:MUSIC_OUTPUT_LEVEL,.28);
     }else{
-      musicMaster.gain.setTargetAtTime(0,actx.currentTime,.12);
+      setMusicLevel(0,.12);
     }
   }
   function syncMusicPause(){
     if(musicMaster && musicEnabled && actx){
-      musicMaster.gain.setTargetAtTime(state==='paused'?0:.24,actx.currentTime,.18);
+      setMusicLevel(state==='paused'?0:MUSIC_OUTPUT_LEVEL,.2);
     }
   }
   // 移动浏览器禁止无交互自动发声：封面照常自动淡出，音乐在玩家首次触摸/按键后解锁。

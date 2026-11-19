@@ -783,6 +783,12 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 
 
+
+### 2026-11-19 · P2 CCD 同时接触与零时间事件
+- 增加高速圆球同时撞击正交两静态平面的场景：调度器先处理最早 TOI，再在剩余时间中识别第二个零时间接触，两个法向冲量均由统一求解器产生。
+- 新增测试验证两次 CCD 事件、反弹方向及剩余时间位置；主线 physics-core Job 70/70 通过，Actions run [44451158334](https://github.com/Bionicera/Game/actions/runs/44451158334)。
+- 这证明当前原型能串行处理该正交双面场景，不等同于任意多接触/堆叠系统已完成；CCD 事件上限仍为每步 16 次。
+
 ### 2026-11-19 · P2 Swept Broad Phase for CCD
 - broad-phase pair builder 增加 sweepDt：动态 Circle 包围盒取当前位置与按当前速度预测的剩余步末位置之并集；静态 Collider 使用原始包围盒，Plane 仍为无限范围。
 - PhysicsWorld 每次寻找下一 TOI 前重建 swept candidate pairs，仅对候选 Circle–Plane/Segment/AABB/Circle 执行连续检测；避免为每个动态球遍历全部 Collider。

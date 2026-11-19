@@ -271,7 +271,7 @@
   let ringSling = {
     phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
     cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,
-    dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''
+    dashProgress:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''
   };
   // RingPlanner：技能仲裁与短期组合上下文；只输出挡板目标，不直接写球体物理。
   let ringPlanner = {skill:'recover',targetX:null,reason:'等待感知',confidence:0,focus:null,phase:'idle',updatedAt:0};
@@ -618,7 +618,7 @@
     ringSling={
       phase:'oscillate',focus:o,anchorX,targetX:firstTarget,dashDir,exitSide,
       cyclesTarget,halfSwings:0,amplitude,dashStartX:anchorX,dashDistance:0,
-      dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:ringSling.lastCycles||0,lastAngle:0,abortReason:''
+      dashProgress:0,cooldown:0,phaseTime:0,lastCycles:ringSling.lastCycles||0,lastAngle:0,abortReason:''
     };
     return true;
   }
@@ -646,7 +646,7 @@
         const lastCycles=ringSling.lastCycles||0;
         ringSling={phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,
           cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,
-          dashProgress:0,releaseTimer:0,cooldown:0,lastCycles,lastAngle:ringSling.lastAngle||0};
+          dashProgress:0,cooldown:0,lastCycles,lastAngle:ringSling.lastAngle||0};
       }
       return ringSling;
     }
@@ -703,13 +703,8 @@
       ringSling.dashProgress=clamp(signedTravel/Math.max(1,ringSling.dashDistance),0,1);
       const reachedTarget=Math.abs(paddle.x-ringSling.targetX)<=5&&signedTravel>=0;
       if(ringSling.dashProgress>=.9||reachedTarget){
-        ringSling.phase='release';ringSling.releaseTimer=0;ringSling.phaseTime=0;
+        ringSling.phase='release';ringSling.phaseTime=0;
         advanceRingCombo('dash','单向短冲完成');
-      }
-    }else if(ringSling.phase==='release'){
-      ringSling.releaseTimer+=d;
-      if(ringSling.releaseTimer>.48){
-        ringSling.phase='idle';ringSling.focus=null;
       }
     }
     return ringSling;

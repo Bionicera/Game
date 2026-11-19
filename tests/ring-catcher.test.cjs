@@ -426,12 +426,12 @@ test('active sling keeps its action window unless the ball enters emergency catc
   assert.equal(idleDanger.skill,'safe-catch','normal survival threshold remains unchanged outside sling');
 });
 
-test('RingPlanner guide and gap targets move the ring toward the ball path', () => {
+test('RingPlanner low-speed boost and gap targets move the ring toward the ball path', () => {
   const h=harness(),focus={x:520,y:400,vx:0,vy:100,r:8};
   const sensor={valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'stable',gapEta:null,
     gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'inside'};
   const plan=h.planRingSkill(sensor,{intent:'aim'},focus);
-  assert.equal(plan.skill,'guide');
+  assert.equal(plan.skill,'boost','sub-threshold balls use the outer wall even when inside the ring');
   assert.ok(plan.targetX<focus.x,'paddle target is left edge coordinate centered beneath the ball');
   const gap=h.planRingSkill({...sensor,gapEta:.12,gapPassable:true,gapPredictedX:600},{intent:'guide-through'},focus);
   assert.equal(gap.skill,'gap-guide');

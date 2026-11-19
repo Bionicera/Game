@@ -39,9 +39,7 @@ function solveContact(a,b,normal,{restitution=1,friction=0}={}) {
   const impulse = add(scale(n,jn),scale(t,jt));
   a.v = add(a.v,scale(impulse,a.invMass));
   b.v = sub(b.v,scale(impulse,b.invMass));
-  const boundaryWork = a.mass === Infinity || b.mass === Infinity ? NaN :
-    (kinetic(a)-0); // replaced below by per-body delta using pre-solve snapshots
-  return {valid:true,applied:true,jn,jt,un,ut,impulse,boundaryWork};
+  return {valid:true,applied:true,jn,jt,un,ut,impulse};
 }
 
 function resolve(a,b,n,opts={}) {
@@ -55,8 +53,8 @@ function resolve(a,b,n,opts={}) {
   result.deltaPA = sub(momentum(a),beforePA);
   result.deltaPB = sub(momentum(b),beforePB);
   // For a kinematic B, work delivered to dynamic A is the dynamic body's ΔK.
-  result.kinematicBoundaryWork = b.invMass===0 ? result.deltaKA :
-    a.invMass===0 ? result.deltaKB : 0;
+  result.kinematicBoundaryWork = b.invMass===0 ? dot(result.impulse,b.surface) :
+    a.invMass===0 ? -dot(result.impulse,a.surface) : 0;
   return result;
 }
 
@@ -114,8 +112,9 @@ test('kinematic boundary work equals dynamic-body kinetic-energy change', () => 
   const a=body(2,{x:-4,y:3}), paddle=body(Infinity,{x:0,y:0},{x:2,y:0});
   const before=kinetic(a);
   const r=resolve(a,paddle,{x:1,y:0},{restitution:.6});
-  assert.ok(Math.abs((kinetic(a)-before)-r.kinematicBoundaryWork)<EPS);
-  assert.ok(Math.abs(r.kinematicBoundaryWork-r.deltaKA)<EPS);
+  const expectedDissipation=.5*(1/(a.invMass+paddle.invMass))*(1-.6*.6)*36;
+  assert.ok(Math.abs(r.kinematicBoundaryWork-38.4)<EPS);
+  assert.ok(Math.abs((kinetic(a)-before)-(r.kinematicBoundaryWork-expectedDissipation))<EPS);
 });
 test('degenerate normals and non-finite inputs fail closed without NaN', () => {
   const a=body(1,{x:1,y:2}), wall=body(Infinity,{x:0,y:0});

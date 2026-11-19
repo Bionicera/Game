@@ -566,14 +566,40 @@
   const ringAimOffset = rel => clamp(rel, -.92, .92) * RING_R();
   // 速度分界先以 ×5 为测试起点；由多角度内壁碰撞压力测试校准。
   function ringUsesInnerWall(speedRatio){return Number.isFinite(speedRatio)&&speedRatio>=5;}
-  // 外环完整圆弧的真实径向法线，不把下半部改造成向上弹射面。
+  // 外环按碰撞点投影：给定圆弧角，返回真实壁面点、球心接触点与径向法线。
+  // 顶部缺口不生成实体点；上下半部的法线方向保持真实几何。
   function ringOuterAimNormal(angle){return {x:Math.cos(angle),y:Math.sin(angle)};}
+  function ringOuterAimPoint(angle,r){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+    if(!Number.isFinite(angle)||angle<start-1e-9||angle>end+1e-9)return null;
+    const n=ringOuterAimNormal(angle),R=RING_R();
+    return {angle,q:{x:R*n.x,y:R*n.y},center:{x:(R+(r||0))*n.x,y:(R+(r||0))*n.y},normal:n};
+  }
   function ringOuterAimAngles(count){
     const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap,n=Math.max(8,count||96);
     const angles=[];
     for(let i=0;i<=n;i++)angles.push(start+(end-start)*i/n);
     for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])if(a>=start&&a<=end)angles.push(a);
     return angles.sort((a,b)=>a-b).filter((a,i,list)=>i===0||Math.abs(a-list[i-1])>1e-8);
+  }
+  // 内环按碰撞点角度投影：角度决定真实起伏曲线上的壁面点与法线，
+  // 球心接触点沿该曲线的真实内法线偏移球半径，而不是用横向 rel 猜一个高度。
+  function ringInnerAimPoint(angle,r){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap;
+    let a=angle;
+    if(a<start)a+=Math.PI*2;
+    if(!Number.isFinite(a)||a<start-1e-9||a>end+1e-9)return null;
+    const rr=ringInnerRadius(a),dr=ringInnerRadiusSlope(a),ca=Math.cos(a),sa=Math.sin(a);
+    const tx=dr*ca-rr*sa,ty=dr*sa+rr*ca,tl=Math.hypot(tx,ty)||1;
+    let nx=-ty/tl,ny=tx/tl;
+    if(nx*ca+ny*sa>0){nx=-nx;ny=-ny;}
+    const q={x:rr*ca,y:rr*sa},normal={x:nx,y:ny},radius=r||0;
+    return {angle:a,q,normal,center:{x:q.x+nx*radius,y:q.y+ny*radius}};
+  }
+  function ringInnerAimAngles(count){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap,n=Math.max(8,count||120),angles=[];
+    for(let i=0;i<=n;i++)angles.push(start+(end-start)*i/n);
+    return angles;
   }
   function ringAimMode(rel,r){
     // 通道按最窄的内环口计算，并扣除球半径与少量数值余量，避免擦边误判为可通过。
@@ -1639,25 +1665,32 @@
     const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
     for(let rel=firstRel;rel<=lastRel;rel+=relStep)regularRels.push(rel);
     // 高速捕捉仍瞄准缺口；低速外壁攻击遍历真实外圆弧（含中点与下半部）。
-    const outerAngles=isRing&&preferredRingMode==='attack'?ringOuterAimAngles(96):[];
+    const outerAngles=isRing&&preferredRingMode==='attack'?ringOuterAimAngles(120):[];
+    const innerAngles=isRing&&preferredRingMode==='capture'?ringInnerAimAngles(144):[];
     const candidates=isRing&&preferredRingMode==='attack'
-      ?outerAngles.map(angle=>({angle,outer:true})):regularRels.map(rel=>({rel,outer:false}));
+      ?outerAngles.map(angle=>({angle,outer:true}))
+      :isRing&&preferredRingMode==='capture'
+        ?innerAngles.map(angle=>({angle,inner:true}))
+        :regularRels.map(rel=>({rel,outer:false,inner:false}));
     for(const candidate of candidates){
-      const outer=isRing&&candidate.outer;
-      const angle=outer?candidate.angle:null;
-      const rel=outer?clamp(((RING_R()+r)*Math.cos(angle))/RING_R(),-.92,.92):candidate.rel;
+      const outer=isRing&&candidate.outer,inner=isRing&&candidate.inner;
+      const angle=(outer||inner)?candidate.angle:null;
+      const projected=outer?ringOuterAimPoint(angle,r):inner?ringInnerAimPoint(angle,r):null;
+      if((outer||inner)&&!projected)continue;
+      const rel=(outer||inner)
+        ?clamp(projected.center.x/RING_R(),-.92,.92):candidate.rel;
       if(!isRing&&Math.abs(rel)<.18)continue;
-      if(isRing&&!outer&&ringAimMode(rel,r)!==preferredRingMode)continue;
-      const offset=outer?(RING_R()+r)*Math.cos(angle):(isRing?ringAimOffset(rel):rel*paddle.w/2);
+      if(isRing&&!outer&&!inner&&ringAimMode(rel,r)!==preferredRingMode)continue;
+      const offset=(outer||inner)?projected.center.x:(isRing?ringAimOffset(rel):rel*paddle.w/2);
       let candidateX=landX,contactY=surfaceY((rel+1)/2)-r,normalOverride=null,forcedMode=null;
-      if(isRing&&outer){
+      if(isRing&&(outer||inner)){
         const cy=paddle.y+paddle.h-RING_R();
-        contactY=cy+(RING_R()+r)*Math.sin(angle);
-        if(Math.abs(focus.vy)<.01)continue;
+        contactY=cy+projected.center.y;
+        if(focus.vy<=.01)continue;
         const tt=(contactY-focus.y)/focus.vy;
         if(tt<0)continue;
         candidateX=reflectScreenX(focus.x+focus.vx*tt,r);
-        normalOverride=ringOuterAimNormal(angle);forcedMode='attack';
+        normalOverride=projected.normal;forcedMode=outer?'attack':'capture';
       }else if(isRing){
         contactY=ringAimContactY(rel,r);
         if(focus.vy>.01){
@@ -1699,7 +1732,7 @@
       const cost=-utility+switchPenalty+relPenalty+(first.x<0||first.x>W?.08:0);
       if(!best||cost<best.cost)
         best={cost,rel,Ux,brick:first.b,err:0,need:ang,tx:first.x,landX:candidateX,
-          mode:isRing?ringAimMode(rel,r):'standard',chainCount:path.hits.length,brain:learned};
+          mode:isRing?(forcedMode||ringAimMode(rel,r)):'standard',contactAngle:angle,chainCount:path.hits.length,brain:learned};
     }
     const fallbackRel=isRing&&preferredRingMode==='attack'?.90:0;
     aimPlan=best||{rel:fallbackRel,Ux:0,brick:null,err:0,mode:isRing?preferredRingMode:'standard'};

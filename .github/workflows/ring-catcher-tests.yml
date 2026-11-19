@@ -6,6 +6,7 @@ on:
       - 'Portrait Breakout.html'
       - 'tests/ring-catcher.test.cjs'
       - 'tests/ring-browser-smoke.cjs'
+      - 'tests/ring-first-level-benchmark.cjs'
       - '.github/workflows/ring-catcher-tests.yml'
   workflow_dispatch:
 jobs:
@@ -25,3 +26,11 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm install --no-save playwright@1.56.1
       - run: node tests/ring-browser-smoke.cjs
+
+  first-level-benchmark:
+    runs-on: ubuntu-latest
+    container: mcr.microsoft.com/playwright:v1.56.1-noble
+    steps:
+      - uses: actions/checkout@v4
+      - run: npm install --no-save playwright@1.56.1
+      - run: node tests/ring-first-level-benchmark.cjs

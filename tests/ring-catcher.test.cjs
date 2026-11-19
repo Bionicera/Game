@@ -233,7 +233,7 @@ test('inner wall soft contact dissipates speed while retaining a valid response'
 
 test('inner angle projection returns the exact wavy-wall contact point and inward normal', () => {
   const h=harness(),p=h.paddle,R=p.w*.47,gap=Math.asin(24/R),angles=[
-    -Math.PI/2+gap+.08,-.7,0,.8,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.08
+    -Math.PI/2+gap+.08,-.7,0,.8,Math.PI/2,Math.PI,3*Math.PI/2-gap-.08
   ];
   for(const angle of angles){
     const point=h.ringInnerAimPoint(angle,8);
@@ -249,7 +249,7 @@ test('inner angle projection returns the exact wavy-wall contact point and inwar
 });
 test('inner angle projections match real swept collisions at upper, side and lower wall angles', () => {
   const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R);
-  for(const angle of [-Math.PI/2+gap+.12,-.35,0,.7,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.12]){
+  for(const angle of [-Math.PI/2+gap+.12,-.35,0,.7,Math.PI/2,Math.PI,3*Math.PI/2-gap-.12]){
     const point=h.ringInnerAimPoint(angle,8);
     const o={x:p.x+p.w/2+point.center.x,y:cy+point.center.y,
       vx:-point.normal.x*260,vy:-point.normal.y*260,r:8};
@@ -259,7 +259,7 @@ test('inner angle projections match real swept collisions at upper, side and low
 });
 test('outer collision-point projections match the exact circular wall and reject the gap', () => {
   const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R);
-  const angles=[-Math.PI/2+gap+.08,0,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.08];
+  const angles=[-Math.PI/2+gap+.08,0,Math.PI/2,Math.PI,3*Math.PI/2-gap-.08];
   for(const angle of angles){
     const point=h.ringOuterAimPoint(angle,8);
     assert.ok(point);

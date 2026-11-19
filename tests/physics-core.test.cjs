@@ -63,8 +63,8 @@ test('separating contact receives no second impulse', () => {
 test('friction impulse is bounded by Coulomb limit', () => {
   const a=body(1,{x:4,y:20}), wall=body(Infinity,{x:0,y:0});
   const r=resolve(a,wall,{x:-1,y:0},{restitution:0,friction:.25});
-  assert.ok(Math.abs(r.tangentImpulse)<=.25*r.jn+EPS);
-  assert.ok(Math.abs(r.jt-.25*r.jn)<EPS);
+  assert.ok(Math.abs(r.tangentImpulse)<=.25*r.normalImpulse+EPS);
+  assert.ok(Math.abs(r.tangentImpulse-.25*r.normalImpulse)<EPS);
 });
 test('static frictionless collision energy change matches impulse work', () => {
   const a=body(3,{x:8,y:5}), wall=body(Infinity,{x:0,y:0});

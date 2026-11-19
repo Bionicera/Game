@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {colliderBounds,buildBroadPhasePairs,sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -668,4 +668,47 @@ test('PhysicsWorld CCD finds a static circle even when it is registered first', 
   assert.equal(result.ccdEventCount,1);
   assert.ok(ball.velocity.x<0);
   assert.ok(Math.abs(ball.position.x+14)<1e-7);
+});
+
+
+test('colliderBounds produces finite bounds and infinite planes', () => {
+  const ball=body(1), planeBody=body(Infinity);
+  ball.position={x:3,y:4};
+  assert.deepEqual(colliderBounds(createCollider(ball,'circle',{radius:2})),{minX:1,maxX:5,minY:2,maxY:6});
+  assert.deepEqual(colliderBounds(createCollider(planeBody,'plane',{normal:{x:0,y:1},offset:0})),
+    {minX:-Infinity,maxX:Infinity,minY:-Infinity,maxY:Infinity});
+});
+test('sweep-and-prune broad phase filters separated finite colliders and keeps plane pairs', () => {
+  const worldBodies=[body(1),body(1),body(Infinity),body(Infinity)];
+  worldBodies[0].position={x:0,y:0};
+  worldBodies[1].position={x:20,y:20};
+  const colliders=[
+    createCollider(worldBodies[0],'circle',{radius:1}),
+    createCollider(worldBodies[1],'circle',{radius:1}),
+    createCollider(worldBodies[2],'plane',{normal:{x:0,y:1},offset:0}),
+    createCollider(worldBodies[3],'segment',{a:{x:50,y:50},b:{x:60,y:50}})
+  ];
+  const result=buildBroadPhasePairs(colliders);
+  assert.equal(result.valid,true);
+  assert.deepEqual(result.pairs,[[0,2],[1,2]]);
+});
+test('broad phase returns stable collider-index pair order and skips static-static pairs', () => {
+  const a=body(Infinity), b=body(Infinity), c=body(1);
+  const colliders=[
+    createCollider(a,'aabb',{x:0,y:0,halfWidth:2,halfHeight:2}),
+    createCollider(b,'segment',{a:{x:-1,y:0},b:{x:1,y:0}}),
+    createCollider(c,'circle',{radius:1})
+  ];
+  const first=buildBroadPhasePairs(colliders), second=buildBroadPhasePairs(colliders);
+  assert.deepEqual(first.pairs,[[0,2],[1,2]]);
+  assert.deepEqual(first.pairs,second.pairs);
+});
+test('broad phase fails closed when collider geometry is corrupted', () => {
+  const ball=body(1), wall=body(Infinity);
+  const circle=createCollider(ball,'circle',{radius:1});
+  const plane=createCollider(wall,'plane',{normal:{x:0,y:1},offset:0});
+  plane.geometry.normal={x:0,y:0};
+  const result=buildBroadPhasePairs([circle,plane]);
+  assert.equal(result.valid,false);
+  assert.equal(result.reason,'invalid-collider');
 });

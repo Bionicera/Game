@@ -10,6 +10,16 @@ on:
       - 'tests/physics-core.test.cjs'
       - 'physics/physics-core.cjs'
       - '.github/workflows/ring-catcher-tests.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Portrait Breakout.html'
+      - 'tests/ring-catcher.test.cjs'
+      - 'tests/ring-browser-smoke.cjs'
+      - 'tests/ring-first-level-benchmark.cjs'
+      - 'tests/physics-core.test.cjs'
+      - 'physics/physics-core.cjs'
+      - '.github/workflows/ring-catcher-tests.yml'
   workflow_dispatch:
 jobs:
   ring-catcher:

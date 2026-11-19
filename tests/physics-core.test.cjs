@@ -54,13 +54,13 @@ test('separating contact receives no second impulse', () => {
   const a=body(1,{x:-2,y:0}), wall=body(Infinity,{x:0,y:0});
   const r=resolve(a,wall,{x:-1,y:0});
   assert.equal(r.applied,false);
-  assert.equal(r.jn,0);
+  assert.equal(r.normalImpulse,0);
   assert.equal(a.velocity.x,-2);
 });
 test('friction impulse is bounded by Coulomb limit', () => {
   const a=body(1,{x:4,y:20}), wall=body(Infinity,{x:0,y:0});
   const r=resolve(a,wall,{x:-1,y:0},{restitution:0,friction:.25});
-  assert.ok(Math.abs(r.jt)<=.25*r.jn+EPS);
+  assert.ok(Math.abs(r.tangentImpulse)<=.25*r.jn+EPS);
   assert.ok(Math.abs(r.jt-.25*r.jn)<EPS);
 });
 test('static frictionless collision energy change matches impulse work', () => {
@@ -83,7 +83,7 @@ test('degenerate normals and non-finite inputs fail closed without NaN', () => {
   const zero=resolve(a,wall,{x:0,y:0});
   assert.equal(zero.valid,false);
   assert.deepEqual(a.velocity,{x:1,y:2});
-  const bad=body(1,{x:NaN,y:0});
+  const bad=body(1,{x:0,y:0}); bad.velocity.x=NaN;
   const invalid=resolve(bad,wall,{x:-1,y:0});
   assert.equal(invalid.valid,false);
   assert.ok(!Number.isNaN(a.velocity.x) && !Number.isNaN(a.velocity.y));

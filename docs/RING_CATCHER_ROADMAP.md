@@ -658,8 +658,8 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] PhysicsWorld 支持可配置 1–32 轮顺序冲量迭代，累计各轮冲量并在求解后单独做位置修正。
 - [x] 新增 Contact 集合与多接触角点测试；主线 `physics-core` Job 46/46 通过（run 44448597608）。
 - [ ] 实现 broad phase；当前仍为全量 Collider 配对检测。
-- [x] 实现 Circle-Plane、Circle-Segment、Circle-AABB TOI/CCD：覆盖线段侧面/圆端帽、AABB 四个面/圆角；按最早撞击时刻推进剩余时间。
-- [ ] 扩展 TOI/CCD 至 Circle-Circle 与运动学移动边界；当前 CCD 仅覆盖动态 Circle 对静止 Plane/Segment/AABB。
+- [x] 实现 Circle-Plane、Circle-Segment、Circle-AABB、Circle-Circle TOI/CCD：覆盖线段侧面/圆端帽、AABB 四个面/圆角，以及双圆相对运动；按最早撞击时刻推进剩余时间。
+- [ ] 扩展 TOI/CCD 至运动学移动边界；当前 CCD 不处理运动学几何的平移扫掠。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -778,6 +778,13 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 
 
+
+
+### 2026-11-19 · P2 TOI/CCD 扩展（Circle–Circle）
+- 新增 sweepCircleCircle：基于两圆相对位置/相对速度求最早二次方程根，输出双圆 TOI、撞击中心、B→A 法线与接触点。
+- PhysicsWorld 调度动态圆-动态圆及动态圆-静态圆扫掠；碰撞时同时将两个动态体推进至撞击时刻，再通过统一 Contact/冲量求解并积分剩余时间。静态圆 Collider 即使先注册也能被正确检测。
+- 新增 4 项测试，覆盖相对运动 TOI、分离/不相交轨迹、双动态圆高速对撞和静态圆注册顺序。主线 physics-core Job 63/63 通过，Actions run [44450520135](https://github.com/Bionicera/Game/actions/runs/44450520135)。
+- 生产页面与生产循环仍未迁移；运动学移动几何、broad phase、复杂多接触事件调度及第一关真实通关仍是后续工作。
 
 ### 2026-11-19 · P2 TOI/CCD 扩展（Circle–Segment / Circle–AABB）
 - 新增 sweepCircleSegment：有限线段侧面与两端圆帽分别计算 TOI，线段外延不会被误当成无限墙。

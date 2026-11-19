@@ -1324,10 +1324,12 @@
   // 内壁采用挡板参考系软反射，但挡板运动不能把“捕捉/减速”变成无限做功。
   // 保留切向控制与移动方向，同时限制单次接触后的绝对球速；低于下限时才补足防停滞速度。
   function ringInnerSoftBounce(vx,vy,nx,ny,paddleVx,speedFloor,speedBefore){
-    const ux=vx-(paddleVx||0),uy=vy,tx=-ny,ty=nx;
+    // 软壁仍能被挡板带动，但只允许有限的墙面速度传递，避免高速追球时把球“抽飞”。
+    const wallVx=clamp(paddleVx||0,-baseSpeed()*.4,baseSpeed()*.4);
+    const ux=vx-wallVx,uy=vy,tx=-ny,ty=nx;
     const vn=ux*nx+uy*ny,vt=ux*tx+uy*ty;
     const softNormal=-vn*.28,softTangent=vt*.94;
-    let outX=(paddleVx||0)+softNormal*nx+softTangent*tx;
+    let outX=wallVx+softNormal*nx+softTangent*tx;
     let outY=softNormal*ny+softTangent*ty;
     const floor=Math.max(1,Number.isFinite(speedFloor)?speedFloor:0);
     const before=Math.max(0,Number.isFinite(speedBefore)?speedBefore:Math.hypot(vx,vy));

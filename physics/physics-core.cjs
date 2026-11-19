@@ -356,39 +356,76 @@ function sweepCircleCircle({positionA,velocityA,radiusA,positionB,velocityB,radi
   }};
 }
 
+function colliderBounds(collider) {
+  if (!collider || !collider.body || !['circle','plane','aabb','segment'].includes(collider.shape)) return null;
+  const g=collider.geometry||{};
+  if (collider.shape==='circle') {
+    if (!(g.radius>0) || !Number.isFinite(g.radius) || !isFiniteVector(collider.body.position)) return null;
+    const p=collider.body.position;
+    return {minX:p.x-g.radius,maxX:p.x+g.radius,minY:p.y-g.radius,maxY:p.y+g.radius};
+  }
+  if (collider.shape==='aabb') {
+    if (![g.x,g.y,g.halfWidth,g.halfHeight].every(Number.isFinite) || !(g.halfWidth>0) || !(g.halfHeight>0)) return null;
+    return {minX:g.x-g.halfWidth,maxX:g.x+g.halfWidth,minY:g.y-g.halfHeight,maxY:g.y+g.halfHeight};
+  }
+  if (collider.shape==='segment') {
+    if (!isFiniteVector(g.a) || !isFiniteVector(g.b) || Math.hypot(g.b.x-g.a.x,g.b.y-g.a.y)<EPSILON) return null;
+    return {minX:Math.min(g.a.x,g.b.x),maxX:Math.max(g.a.x,g.b.x),minY:Math.min(g.a.y,g.b.y),maxY:Math.max(g.a.y,g.b.y)};
+  }
+  if (!isFiniteVector(g.normal) || Math.hypot(g.normal.x,g.normal.y)<EPSILON || !Number.isFinite(g.offset)) return null;
+  return {minX:-Infinity,maxX:Infinity,minY:-Infinity,maxY:Infinity};
+}
+
+function buildBroadPhasePairs(colliders) {
+  if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',pairs:[]};
+  const entries=[];
+  for (let i=0;i<colliders.length;i++) {
+    const bounds=colliderBounds(colliders[i]);
+    if (!bounds) return {valid:false,reason:'invalid-collider',pairs:[]};
+    entries.push({index:i,...bounds});
+  }
+  entries.sort((a,b)=>a.minX-b.minX || a.index-b.index);
+  const active=[], pairs=[];
+  for (const current of entries) {
+    for (let i=active.length-1;i>=0;i--) if (active[i].maxX<current.minX-EPSILON) active.splice(i,1);
+    for (const other of active) {
+      if (other.maxY<current.minY-EPSILON || current.maxY<other.minY-EPSILON) continue;
+      const i=Math.min(other.index,current.index), j=Math.max(other.index,current.index);
+      const a=colliders[i], b=colliders[j];
+      if (a.body===b.body || (a.body.invMass===0 && b.body.invMass===0)) continue;
+      pairs.push([i,j]);
+    }
+    active.push(current);
+  }
+  pairs.sort((a,b)=>a[0]-b[0] || a[1]-b[1]);
+  return {valid:true,pairs};
+}
+
 function detectContacts(colliders) {
   if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',contacts:[]};
+  const broadPhase=buildBroadPhasePairs(colliders);
+  if (!broadPhase.valid) return {valid:false,reason:broadPhase.reason,contacts:[]};
   const contacts=[];
-  for(let i=0;i<colliders.length;i++) {
-    const a=colliders[i];
-    if(!a || !a.body || !['circle','plane','aabb','segment'].includes(a.shape)) {
-      return {valid:false,reason:'invalid-collider',contacts:[]};
-    }
-    for(let j=i+1;j<colliders.length;j++) {
-      const b=colliders[j];
-      if(!b || !b.body || !['circle','plane','aabb','segment'].includes(b.shape)) {
-        return {valid:false,reason:'invalid-collider',contacts:[]};
+  for (const [i,j] of broadPhase.pairs) {
+    const a=colliders[i], b=colliders[j];
+    let contact=null;
+    if(a.shape==='circle') {
+      contact=circleContact(a,b);
+    } else if(b.shape==='circle') {
+      const reversed=circleContact(b,a);
+      if(reversed) {
+        const result=createContact({
+          bodyA:reversed.bodyB,bodyB:reversed.bodyA,point:reversed.point,
+          normal:scale(reversed.normal,-1),penetration:reversed.penetration,toi:reversed.toi,
+          surfaceVelocity:reversed.bodyB.surfaceVelocity || {x:0,y:0},
+          featureId:reversed.featureId,material:reversed.material
+        });
+        if(!result.valid) return {valid:false,reason:result.reason,contacts:[]};
+        contact=result.contact;
       }
-      if(a.body===b.body || (a.body.invMass===0 && b.body.invMass===0)) continue;
-      let contact=null;
-      if(a.shape==='circle') {
-        contact=circleContact(a,b);
-      } else if(b.shape==='circle') {
-        const reversed=circleContact(b,a);
-        if(reversed) {
-          const result=createContact({
-            bodyA:reversed.bodyB,bodyB:reversed.bodyA,point:reversed.point,
-            normal:scale(reversed.normal,-1),penetration:reversed.penetration,toi:reversed.toi,
-            surfaceVelocity:reversed.bodyB.surfaceVelocity || {x:0,y:0},
-            featureId:reversed.featureId,material:reversed.material
-          });
-          if(!result.valid) return {valid:false,reason:result.reason,contacts:[]};
-          contact=result.contact;
-        }
-      }
-      if(contact && contact.valid===false) return {valid:false,reason:contact.reason,contacts:[]};
-      if(contact) contacts.push(contact);
     }
+    if(contact && contact.valid===false) return {valid:false,reason:contact.reason,contacts:[]};
+    if(contact) contacts.push(contact);
   }
   const bodyOrder=new Map();
   for (const collider of colliders) {
@@ -753,4 +790,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {colliderBounds,buildBroadPhasePairs,sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

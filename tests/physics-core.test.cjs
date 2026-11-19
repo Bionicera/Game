@@ -493,7 +493,7 @@ test('sweepCirclePlane ignores separating, non-crossing and initially overlappin
 test('PhysicsWorld CCD prevents a fast circle tunneling through a static plane', () => {
   for (const dt of [.05,.1,.2]) {
     const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), wall=body(Infinity);
-    ball.position={x:2,y:dt*200+1};
+    ball.position={x:2,y:10};
     world.addBody(ball); world.addBody(wall);
     world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
     world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
@@ -502,7 +502,7 @@ test('PhysicsWorld CCD prevents a fast circle tunneling through a static plane',
     assert.equal(result.ccdEventCount,1);
     assert.ok(ball.position.y>=1-EPS);
     assert.ok(ball.velocity.y>0);
-    assert.ok(Math.abs(ball.position.y-(1+dt*200))<1e-7);
+    assert.ok(Math.abs(ball.position.y-(1+200*(dt-.045)))<1e-7);
   }
 });
 test('PhysicsWorld CCD respects restitution and reports swept contact metadata', () => {

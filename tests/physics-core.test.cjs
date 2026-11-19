@@ -520,11 +520,12 @@ test('PhysicsWorld CCD respects restitution and reports swept contact metadata',
   assert.ok(Math.abs(ball.position.y-3.5)<EPS);
 });
 test('PhysicsWorld rolls back the whole step when CCD exceeds its event safety limit', () => {
-  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-1e6}), wall=body(Infinity);
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:1000}), lower=body(Infinity), upper=body(Infinity);
   ball.position={x:0,y:1};
-  world.addBody(ball); world.addBody(wall);
-  world.addCollider(createCollider(ball,'circle',{radius:1}));
-  world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0}));
+  world.addBody(ball); world.addBody(lower); world.addBody(upper);
+  world.addCollider(createCollider(ball,'circle',{radius:.1}));
+  world.addCollider(createCollider(lower,'plane',{normal:{x:0,y:1},offset:0}));
+  world.addCollider(createCollider(upper,'plane',{normal:{x:0,y:-1},offset:-2}));
   const before={position:{...ball.position},velocity:{...ball.velocity},force:{...ball.force}};
   const result=world.step(.1);
   assert.equal(result.valid,false);

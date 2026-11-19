@@ -135,4 +135,137 @@ function solveContact(bodyA, bodyB, normal, material={}) {
   };
 }
 
-module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact};
+
+
+/**
+ * Deterministic body registry and force/integration owner.
+ * This prototype deliberately has no collision detection or contact pipeline.
+ */
+class PhysicsWorld {
+  constructor() {
+    this.bodies = [];
+    this.bodySet = new Set();
+    this.forceGenerators = [];
+    this.forceGeneratorSet = new Set();
+    this.stepCount = 0;
+  }
+
+  addBody(body) {
+    if (!body || !Number.isFinite(body.invMass) || !isFiniteVector(body.position) ||
+        !isFiniteVector(body.velocity) || !isFiniteVector(body.force)) {
+      return {valid:false,reason:'invalid-body'};
+    }
+    if (this.bodySet.has(body)) return {valid:false,reason:'body-already-registered'};
+    this.bodySet.add(body);
+    this.bodies.push(body);
+    return {valid:true,body};
+  }
+
+  removeBody(body) {
+    if (!this.bodySet.has(body)) return false;
+    this.bodySet.delete(body);
+    this.bodies.splice(this.bodies.indexOf(body),1);
+    return true;
+  }
+
+  addForceGenerator(generator) {
+    if (typeof generator !== 'function') return {valid:false,reason:'invalid-force-generator'};
+    if (this.forceGeneratorSet.has(generator)) return {valid:false,reason:'force-generator-already-registered'};
+    this.forceGeneratorSet.add(generator);
+    this.forceGenerators.push(generator);
+    return {valid:true};
+  }
+
+  removeForceGenerator(generator) {
+    if (!this.forceGeneratorSet.has(generator)) return false;
+    this.forceGeneratorSet.delete(generator);
+    this.forceGenerators.splice(this.forceGenerators.indexOf(generator),1);
+    return true;
+  }
+
+  step(dt) {
+    if (!(dt > 0) || !Number.isFinite(dt)) return {valid:false,reason:'invalid-world-dt'};
+    const forceSnapshots = this.bodies.map(body => ({body,force:{...body.force}}));
+    for (const body of this.bodies) {
+      if (body.invMass === 0) continue;
+      for (const generator of this.forceGenerators) {
+        let force;
+        try { force = generator(body,dt,this); }
+        catch (_) {
+          for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
+          return {valid:false,reason:'force-generator-threw'};
+        }
+        if (force == null) continue;
+        if (!applyForce(body,force)) {
+          for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
+          return {valid:false,reason:'invalid-generated-force'};
+        }
+      }
+    }
+
+    // Preflight every body on copies so a bad body cannot partially advance the world.
+    const results = [];
+    for (const body of this.bodies) {
+      if (body.invMass === 0) { results.push(null); continue; }
+      const candidate = {...body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}};
+      const result = integrateBody(candidate,dt);
+      if (!result.valid) {
+        for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
+        return {valid:false,reason:result.reason};
+      }
+      results.push({position:candidate.position,velocity:candidate.velocity,force:candidate.force});
+    }
+    for (let i=0;i<this.bodies.length;i++) {
+      if (!results[i]) continue;
+      Object.assign(this.bodies[i],results[i]);
+    }
+    this.stepCount++;
+    return {valid:true,stepCount:this.stepCount,bodyCount:this.bodies.length};
+  }
+}
+
+/**
+ * Fixed-step accumulator. Excess whole steps remain in backlog; they are never
+ * silently discarded. The caller can inspect backlogSeconds and choose when to
+ * catch up. A paused runner does not accumulate wall-clock frame time.
+ */
+class FixedStepRunner {
+  constructor(world,{fixedDt=1/120,maxSubSteps=4}={}) {
+    if (!world || typeof world.step !== 'function') throw new TypeError('world must provide step(dt)');
+    if (!(fixedDt > 0) || !Number.isFinite(fixedDt)) throw new RangeError('fixedDt must be finite and positive');
+    if (!Number.isInteger(maxSubSteps) || maxSubSteps < 1) throw new RangeError('maxSubSteps must be a positive integer');
+    this.world = world;
+    this.fixedDt = fixedDt;
+    this.maxSubSteps = maxSubSteps;
+    this.accumulator = 0;
+    this.paused = false;
+  }
+
+  advance(frameDt) {
+    if (!Number.isFinite(frameDt) || frameDt < 0) return {valid:false,reason:'invalid-frame-dt'};
+    if (this.paused) return {valid:true,steps:0,backlogSeconds:this.accumulator,paused:true};
+    const nextAccumulator = this.accumulator + frameDt;
+    if (!Number.isFinite(nextAccumulator)) return {valid:false,reason:'accumulator-overflow'};
+    this.accumulator = nextAccumulator;
+    let steps = 0;
+    while (this.accumulator + EPSILON >= this.fixedDt && steps < this.maxSubSteps) {
+      const result = this.world.step(this.fixedDt);
+      if (!result.valid) return {...result,steps,backlogSeconds:this.accumulator};
+      this.accumulator = Math.max(0,this.accumulator-this.fixedDt);
+      steps++;
+    }
+    return {valid:true,steps,backlogSeconds:this.accumulator,backlogSteps:Math.floor((this.accumulator+EPSILON)/this.fixedDt)};
+  }
+
+  setPaused(paused) {
+    this.paused = !!paused;
+    return this.paused;
+  }
+
+  reset({clearBacklog=true}={}) {
+    if (clearBacklog) this.accumulator = 0;
+    return {accumulator:this.accumulator,paused:this.paused};
+  }
+}
+
+module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

@@ -657,7 +657,9 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] 增加 Contact 确定性排序/去重；同一 Body 对、feature、接触点与法线的重复结果会合并。
 - [x] PhysicsWorld 支持可配置 1–32 轮顺序冲量迭代，累计各轮冲量并在求解后单独做位置修正。
 - [x] 新增 Contact 集合与多接触角点测试；主线 `physics-core` Job 46/46 通过（run 44448597608）。
-- [ ] 实现 broad phase、TOI/CCD 与高速扫掠；当前几何检测仍为离散窄相位。
+- [ ] 实现 broad phase；当前仍为全量 Collider 配对检测。
+- [x] 实现 Circle-Plane TOI/CCD：高速圆球按最早撞击时刻推进剩余时间，避免穿越无限静态平面；每步最多处理 16 次扫掠碰撞，超限则原子回滚。
+- [ ] 扩展 TOI/CCD 至 Segment/AABB/Circle，以及运动学移动边界；当前 CCD 仅覆盖动态 Circle 对静止 Plane。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -774,6 +776,14 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 - P2 力积分/遥测回归：`physics-core` Job 16/16 通过（[Actions run 44443212807](https://github.com/Bionicera/Game/actions/runs/44443212807)）。当前证据仅覆盖单体半隐式积分与单接触求解，不代表完整世界步进或生产物理验证。
 
+
+
+### 2026-11-19 · P2 首轮 TOI/CCD（Circle–Plane）
+- 新增纯几何 sweepCirclePlane：输入起点、速度、半径、平面与 dt，返回归一化 TOI、撞击圆心、接触点及 B→A 法线；无接近、无穿越和初始重叠路径不伪造扫掠命中。
+- PhysicsWorld.step 在积分力得到步末速度后，先搜索动态 Circle 对静止 Plane 的最早撞击；推进全体动态 Body 至 TOI，统一 Contact/solveContact 处理冲量，再积分本步剩余时间。每步最多 16 个 CCD 事件，超限整体回滚，避免静默穿透。
+- 新增 5 项测试：扫掠几何/TOI、无命中边界、多个 dt 下高速防穿透、恢复系数与接触元数据、事件上限回滚。physics-core Job 51/51 通过，Actions run [44449954180](https://github.com/Bionicera/Game/actions/runs/44449954180)。
+- 本次仅修改独立内核、测试与路线图；生产页面/生产循环未修改、未迁移、未发布部署。
+- 当前明确限制：CCD 只覆盖动态 Circle–静止 Plane；Segment/AABB/Circle 扫掠、运动学移动几何、广相位与生产轨迹验证仍未完成。完整工作流的浏览器 smoke、ring-catcher 与第一关基准 Job 当时仍在运行；单测通过不等于第一关通关。
 
 ### 2026-11-19 · P2 Contact 集合与多接触迭代
 - `detectContacts` 对生成的 Contact 按 Body 注册顺序、featureId、接触点和法线做确定性排序，并按 Body 对/feature/point/normal 合并重复几何结果。

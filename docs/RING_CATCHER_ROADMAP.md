@@ -651,7 +651,10 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] 为 Contact 契约新增 4 项真实模块测试；主线 `physics-core` Job 29/29 通过（run 44447477875）。
 - [x] 建立 `createCollider` 描述器：Circle、Plane、AABB、Segment；校验尺寸/端点/平面法线/材质，并复制几何输入，避免调用方后续修改污染描述器。
 - [x] 新增 3 项 Collider 描述器测试；主线 `physics-core` Job 32/32 通过（run 44447717049）。
-- [ ] 实现 Collider 窄相位几何检测、Contact 集合和 PhysicsWorld 碰撞调度；当前仅有描述器，尚无接触检测。
+- [x] 实现圆形 Collider 对 Plane/AABB/Segment/Circle 的基础窄相位接触检测；法线统一 B→A，覆盖圆心重合确定性方向、AABB 内部最近面和 Collider 顺序反转。
+- [x] PhysicsWorld 注册/移除 Collider，并在 world step 中执行积分→接触检测→冲量求解→位置修正；窄相位失败时回滚本步 Body 状态。
+- [x] 新增窄相位与 World 接触管线测试；主线 `physics-core` Job 42/42 通过（run 44448239737）。
+- [ ] 增加 Contact 确定性排序/去重、TOI/CCD、高速扫掠和多接触迭代；当前是离散窄相位与单轮按序求解。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -767,6 +770,15 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - 仍未建立 World、固定步累积器、TOI、多接触求解和几何模块；本次没有改生产游戏文件。
 
 - P2 力积分/遥测回归：`physics-core` Job 16/16 通过（[Actions run 44443212807](https://github.com/Bionicera/Game/actions/runs/44443212807)）。当前证据仅覆盖单体半隐式积分与单接触求解，不代表完整世界步进或生产物理验证。
+
+
+### 2026-11-19 · P2 窄相位与 PhysicsWorld 接触调度
+- `detectContacts` 实现 Circle 对 Plane/AABB/Segment/Circle 的离散窄相位检测；Contact 法线统一 B→A，接触点/穿透深度/材质由 Contact 工厂校验。AABB 内部重叠选择最近面；圆心重合使用确定性法线；Collider 顺序反转时同步反转法线。
+- `PhysicsWorld` 新增 Collider 注册表/身份去重/移除生命周期；移除 Body 会清理其 Collider。世界步进现在按“力生成→积分→窄相位→冲量求解→位置修正”执行，窄相位或求解失败时恢复本步 Body 位置/速度/累积力。
+- 新增 4 项 World 接触测试，覆盖 Collider 生命周期、圆-平面弹性反射与位置修正、运动学表面速度传能、几何异常回滚。
+- 主线 Actions run [44448239737](https://github.com/Bionicera/Game/actions/runs/44448239737) 总体成功：`physics-core` 42/42、`ring-catcher` 成功、`browser-smoke` 成功。第一关生产 benchmark 仍为 0/6 胜（winRate=0），未通过通关验收。
+- 本轮只改独立物理原型、测试与文档；生产 HTML 未改、生产循环未接入。当前限制：离散检测，无 TOI/CCD、无 broad phase、无 Contact 去重/稳定排序、无多接触迭代。
+- 下一步：补齐 Contact 集合稳定排序/去重与多接触处理，再设计高速球 TOI/CCD；生产迁移仍暂缓。
 
 
 ### 2026-11-19 · P2 Collider 描述器

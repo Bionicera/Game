@@ -649,7 +649,9 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] 新增 World/Runner 生命周期、确定性、积压、暂停与数值失败测试；PhysicsWorld/Runner 已由主线 CI 覆盖。
 - [x] 建立 `createContact` 数据契约：验证 Body 身份、有限接触向量、单位 B→A 法线、非负穿透、归一化 TOI、featureId 与材质系数。
 - [x] 为 Contact 契约新增 4 项真实模块测试；主线 `physics-core` Job 29/29 通过（run 44447477875）。
-- [ ] 建立 Collider 几何接口与接触集合；当前 World 尚未注册 Collider，也未调度几何检测。
+- [x] 建立 `createCollider` 描述器：Circle、Plane、AABB、Segment；校验尺寸/端点/平面法线/材质，并复制几何输入，避免调用方后续修改污染描述器。
+- [x] 新增 3 项 Collider 描述器测试；主线 `physics-core` Job 32/32 通过（run 44447717049）。
+- [ ] 实现 Collider 窄相位几何检测、Contact 集合和 PhysicsWorld 碰撞调度；当前仅有描述器，尚无接触检测。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -765,6 +767,14 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - 仍未建立 World、固定步累积器、TOI、多接触求解和几何模块；本次没有改生产游戏文件。
 
 - P2 力积分/遥测回归：`physics-core` Job 16/16 通过（[Actions run 44443212807](https://github.com/Bionicera/Game/actions/runs/44443212807)）。当前证据仅覆盖单体半隐式积分与单接触求解，不代表完整世界步进或生产物理验证。
+
+
+### 2026-11-19 · P2 Collider 描述器
+- 主线 `physics/physics-core.cjs` 新增 `createCollider`，支持 Circle、Plane、AABB、Segment 四类基础几何描述；平面法线在创建时归一化并同步缩放 offset，Segment 端点、几何参数和材质均进行校验/快照复制。
+- `tests/physics-core.test.cjs` 新增 3 项测试，覆盖四类几何合法描述、退化/非法参数与输入快照隔离。
+- 主线 Actions run [44447717049](https://github.com/Bionicera/Game/actions/runs/44447717049) 总体成功：`physics-core` 32/32、`ring-catcher` 成功、`browser-smoke` 成功。`first-level-benchmark` 执行成功但生产玩法仍为 0/6 胜、winRate=0；不代表第一关通关。
+- 本轮只改物理原型、测试与文档；未修改生产页面、未接入生产循环，不发布、不部署。
+- 下一步：实现窄相位检测（先圆-平面、圆-AABB、圆-线段、圆-圆），统一生成 Contact，再处理确定性排序/去重与 PhysicsWorld 接触调度。
 
 
 ### 2026-11-19 · P2 Contact 数据契约

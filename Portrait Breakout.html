@@ -1191,6 +1191,12 @@
   // 挡板横速上限是手指/电机的物理上限，挡板响应是固定的机械增益 —— 都不随关卡变。
   const PADDLE_MAX_V = 900, PADDLE_GAIN = 26;
   // Shared by planning and runtime movement so predicted paddle velocity matches the actuator limit.
+  // 圆环 Auto 的挡板移动速度按基础球速限幅；甩球震荡阶段再收紧，避免高速追球把软内壁推成连续撞击面。
+  function ringAutoPaddleVelocity(targetX,currentX){
+    const ratio=ringSling.phase==='idle'?.78:.62,limit=Math.max(80,baseSpeed()*ratio);
+    return clamp(paddleCommandVelocity(targetX,currentX),-limit,limit);
+  }
+
   function paddleCommandVelocity(targetX, currentX){
     return clamp((targetX - currentX) * PADDLE_GAIN, -PADDLE_MAX_V, PADDLE_MAX_V);
   }
@@ -3032,7 +3038,9 @@
         if(fortressGateX > W-half-4){ fortressGateX=W-half-4; fortressGateDir=-1; }
       }
       const prevPX = paddle.x;
-      const desiredPXV = paddleCommandVelocity(paddle.targetX, paddle.x);
+      const desiredPXV = shape==='ring'&&autoPilot
+        ? ringAutoPaddleVelocity(paddle.targetX,paddle.x)
+        : paddleCommandVelocity(paddle.targetX, paddle.x);
       paddle.x += desiredPXV * dt;
       paddle.vx = (paddle.x - prevPX) / Math.max(dt, .001);
 

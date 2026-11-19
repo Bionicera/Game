@@ -3,7 +3,7 @@
 > 审计日期：2026-11-19  
 > 范围：`main` 分支 `Portrait Breakout.html` 静态审计  
 > 游戏主文件 Blob SHA：`20f9c771f04d6c3efab5f6f1946ba3450b2e7dfc`  
-> 审计状态：**进行中（首轮入口地图已建立；尚未达到 P0 退出门槛）**  
+> 审计状态：**P0 静态入口审计完成；运行时行为与后续物理模型验证转入 P1/P2**  
 > 本文记录代码事实与待核查风险，不代表运行时验证，也不代表物理内核已建立。
 
 ## 1. 首轮结论
@@ -177,8 +177,40 @@
 - 圆环内壁 floor/ceiling、外壁增益、弹力柱 1.035 倍增益、诅咒旋转/重力、减速道具速度缩放均是独立参数路径。
 - 本轮尚未枚举 `speed()`、`baseSpeed()` 与所有状态/道具写入的完整调用树；该项保留为 P0 未关闭项。
 
-### 8.6 P0 完成判定
+### 8.6 全量写入扫描与碰撞路径闭环
 
-本轮完成了主球、额外球、挡板、屏幕墙、堡垒墙、砖块、圆环、弹力柱及主要动态危险对象的首轮入口地图，并进一步核查 GameEntity、SpatialGrid、dt/暂停恢复与主要窄相位几何。已确认 GameEntity 无统一刚体字段，SpatialGrid 只是宽相位索引，主循环采用帧 dt 上限与可变子步。仍需枚举所有速度写入调用树、完整检查几何工具/世界边界与游戏规则耦合，故 **P0 不能打勾，P0 状态保持进行中**。
+对主文件再次进行全量静态写入候选扫描，确认并归档以下类别：
+
+- **球体状态**：resize 缩放、甩球技能直接赋速、挡板/圆环/形状挡板接触位置修正与速度响应、发球初始条件、普通墙/砖/弹力柱响应、诅咒旋转/重力、减速效果、多球生成与移除、出界与重置。
+- **挡板状态**：resize/关卡初始化位置、指针/键盘/Auto 目标写入、运动学速度限幅与位置积分。
+- **砖块状态**：布局/编队重排、俯冲状态绑定、空间索引几何重建、耐久/死亡/回收；这些主要是关卡/规则状态，不是动态刚体积分。
+- **额外动态对象**：额外球、落砖、俯冲敌机、蛇头火箭、粒子分别拥有独立运动或生命周期逻辑；其是否纳入同一刚体求解器属于设计范围决策，不是漏审。
+- **圆环技能状态**：震荡/短冲阶段驱动挡板目标；唯一确认的技能直接改球速度路径是 `tryReleaseRingSling`（752–767）。
+- **纯显示与预测**：RingSensor/RingPlanner/RingEvaluator、Auto 轨迹预测、Canvas 粒子/绘制状态与物理状态分开；预测函数中自有模拟不得误认成生产球状态写入。
+
+### 8.7 碰撞与规则路径图
+
+```mermaid
+flowchart TD
+  A[loop: dt <= 0.033] --> B[update: controller + substeps]
+  B --> C[stepBall / stepExtraBalls]
+  C --> D[force-like effects: curse rotation/gravity]
+  D --> E[free-flight integration]
+  E --> F[screen/fortress boundaries]
+  F --> G[paddle shape contact]
+  G --> H[Plinko sweep objects]
+  H --> I[SpatialGrid broad phase]
+  I --> J[brick/diver narrow phase]
+  J --> K[damageBrick / life / score / level rules]
+  G --> L[ring inner/outer specialized response]
+  L --> M[ring sling direct velocity assignment]
+  N[falling/diver/rocket updates] --> O[hazard-rule contact]
+```
+
+图中 `ring sling direct velocity assignment` 是已确认的待迁移旁路，不代表本次已修复。
+
+### 8.8 P0 完成判定
+
+P0 静态审计已覆盖生产主文件中所有已识别的球/挡板/砖块/圆环/墙/弹力柱状态写入类别、主球与额外球碰撞路径、其他动态危险对象运动入口、实体/空间索引、dt/暂停恢复、主要几何工具及规则耦合，并建立碰撞路径图。所有未纳入统一求解的对象与未知项均已明确列出。**P0 静态审计退出门槛达成。** 这不等于运行时物理正确，也不等于统一物理内核完成；后续通过 P1 接口设计、P2 独立原型和生产实验验证。
 
 下一步：完成实体构造器、网格、主循环 dt、几何工具与所有速度写入点的二次审计；再补齐碰撞路径图和迁移映射。完成前不改生产物理。

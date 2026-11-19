@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringInnerSoftBounce', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -76,7 +76,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringInnerSoftBounce,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -311,6 +311,27 @@ test('inner wall remains a reliable speed-reducing catch through ×80 across obl
   assert.equal(maxReliableRatio,80,'stress-tested reliable range must reach at least ×80');
 });
 
+test('moving paddle cannot turn an inner soft catch into an energy injection', () => {
+  const h=harness(),p=h.paddle;
+  p.vx=900;
+  const R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(Math.PI),r=8;
+  const o={x:p.x+p.w/2-ri+r+.5,y:cy,vx:-300,vy:0,r};
+  const before=Math.hypot(o.vx,o.vy);
+  assert.equal(h.ringContact(o,o.x+5,o.y,true,p.x,p.x),'true'===false?false:true,
+    'the moving inner wall must register the swept contact');
+  const after=Math.hypot(o.vx,o.vy);
+  assert.ok(after<=Math.max(before*.985,300*.22)+1e-6,
+    'inner wall must not add paddle-motion energy above its bounded soft-catch speed');
+  assert.ok(after>=300*.22-1e-6,'inner wall must retain its anti-stall speed floor');
+});
+
+test('inner soft response applies its speed floor even when the relative collision would stop the ball', () => {
+  const h=harness();
+  const out=h.ringInnerSoftBounce(0,0,1,0,0,66,0);
+  assert.ok(Math.abs(Math.hypot(out.vx,out.vy)-66)<1e-9);
+  assert.ok(out.vx>0,'minimum-speed recovery should point back into the ring cavity');
+});
+
 test('outer wall reflects and applies the bounded 1.045 speed gain', () => {
   const h = harness(), p=h.paddle, R=p.w*.47, cy=p.y+p.h-R;
   const o={x:p.x+p.w/2+R+8-.5,y:cy,vx:-300,vy:50,r:8};
@@ -327,10 +348,14 @@ test('open top gap remains a pass-through and is not treated as a collision wall
   assert.equal(h.ringContact(o,o.x,o.y+2,true,p.x,p.x),false);
 });
 
-test('production physics retains soft inner wall and accelerated outer wall', () => {
+test('production physics retains bounded soft inner response and accelerated outer wall', () => {
   const ringContact = extractFunction('ringContact');
-  assert.match(ringContact,/softNormal=-vn\*\.28/);
-  assert.match(ringContact,/softTangent=vt\*\.94/);
+  const innerResponse = extractFunction('ringInnerSoftBounce');
+  assert.ok(ringContact.includes('ringInnerSoftBounce('));
+  assert.match(innerResponse,/softNormal=-vn\*\.28/);
+  assert.match(innerResponse,/softTangent=vt\*\.94/);
+  assert.match(innerResponse,/before\*\.985/);
+  assert.match(innerResponse,/baseSpeed\(\)\*\.22/);
   assert.ok(ringContact.includes('speedCap=baseSpeed()*1.72'));
   assert.ok(ringContact.includes('Math.min(1.045,speedCap/afterReflect)'));
 });

@@ -564,6 +564,10 @@
   const RING_WALL = () => Math.max(5, Math.min(paddle.h * .72, RING_R() * .22));
   // 一个瞄准坐标，两种决策模型：球体能通过有效缺口时捕捉，否则由外环攻击壁接球。
   const ringAimOffset = rel => clamp(rel, -.92, .92) * RING_R();
+  // 速度分界先以 ×5 为测试起点；由多角度内壁碰撞压力测试校准。
+  function ringUsesInnerWall(speedRatio){return Number.isFinite(speedRatio)&&speedRatio>=5;}
+  // 外环完整圆弧的真实径向法线，不把下半部改造成向上弹射面。
+  function ringOuterAimNormal(angle){return {x:Math.cos(angle),y:Math.sin(angle)};}
   function ringAimMode(rel,r){
     // 通道按最窄的内环口计算，并扣除球半径与少量数值余量，避免擦边误判为可通过。
     const throat=RING_R()-RING_WALL();
@@ -592,8 +596,8 @@
     const a=-Math.PI/2+Math.asin(clamp(off/(R+r),-.92,.92));
     return {x:Math.cos(a),y:Math.sin(a)};
   }
-  function ringAimReflect(vx,vy,rel,Ux,r){
-    const mode=ringAimMode(rel,r),n=ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
+  function ringAimReflect(vx,vy,rel,Ux,r,normalOverride,forcedMode){
+    const mode=forcedMode||ringAimMode(rel,r),n=normalOverride||ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
     const raw=Math.hypot(out.vx,out.vy),cap=baseSpeed()*1.72;
     const gain=mode==='capture'?.90:(raw>0?Math.min(1.045,cap/raw):1);
     return {vx:out.vx*gain,vy:out.vy*gain,mode};
@@ -903,27 +907,12 @@
       return ringState;
     }
     const ratio=sensor.speedRatio,cls=sensor.speedClass,trend=sensor.speedTrend;
-    let desired='attack',priority='normal',intent='boost',reason='低速状态，准备外壁增能',risk=0,confidence=.72;
-    if(cls==='extreme'||ratio>=1.65){
-      desired='capture';priority='critical';intent='unload';
-      reason='极高速：优先内壁卸力';risk=1;confidence=.98;
-    }else if(cls==='fast'||ratio>=1.18){
-      desired='capture';priority='high';intent='control';
-      reason='高速：优先内壁软捕捉';risk=.82;confidence=.92;
-    }else if(cls==='crawl'||cls==='slow'||ratio<.82){
-      desired='attack';priority=cls==='crawl'?'high':'normal';intent='boost';
-      reason=cls==='crawl'?'运动能量偏低：准备外壁加速':'低速：优先外壁攻击与增能';
-      risk=cls==='crawl'?.58:.24;confidence=.88;
-    }else if(trend==='accelerating'){
-      desired='capture';priority='elevated';intent='control';
-      reason='常速但仍在加速：提前准备内壁控速';risk=.62;confidence=.78;
-    }else if(trend==='decelerating'){
-      desired='attack';priority='normal';intent='boost';
-      reason='速度正在下降：准备外壁补能';risk=.28;confidence=.8;
-    }else{
-      desired='attack';priority='normal';intent='aim';
-      reason='常速稳定：保持攻击模型';risk=.16;confidence=.74;
-    }
+    // 只用实测速度倍率决定内外壁策略；加减速趋势只作观测，不越过速度边界抢决策。
+    const inner=ringUsesInnerWall(ratio);
+    let desired=inner?'capture':'attack',priority='high';
+    let intent=inner?'unload':'boost';
+    let reason=inner?'高速：优先内壁软捕捉与卸力':'低于内壁接球阈值：优先外壁硬壁增能';
+    let risk=inner?.9:.24,confidence=inner?.94:.88;
     if(sensor.gapEta!==null&&sensor.gapEta<.22&&sensor.gapPassable){
       intent='guide-through';
       reason+='；缺口即将通过，保持通道对准';
@@ -1034,13 +1023,13 @@
       return {skill:'gap-guide',comboName:'unload',targetX:safeTarget(sensor.gapPredictedX),
         reason:'缺口通行条件成立，移动圆环对准通道',confidence:.93,eta:sensor.gapEta};
     }
-    if(sensor.speedRatio>=1.18||sensor.speedTrend==='accelerating'&&sensor.speedRatio>=.92){
+    if(ringUsesInnerWall(sensor.speedRatio)){
       let predicted=focus.x;
       if(sensor.etaInner!==null&&sensor.etaInner<.6)
         predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);
       return {skill:'capture',comboName:'unload',targetX:safeTarget(predicted),reason:'高速或持续加速，优先内壁卸力',confidence:.88};
     }
-    if(sensor.speedRatio<.82||sensor.speedTrend==='decelerating'){
+    if(!ringUsesInnerWall(sensor.speedRatio)){
       return {skill:'boost',comboName:'charge',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
         reason:'能量不足或速度下降，准备外壁硬壁增能',confidence:.82};
     }
@@ -1640,17 +1629,38 @@
     const value=b=>brickStrategicValue(b,levelType(),snake?snake.cells.length:0);
     const previous=aimPlan;
     let best=null;
-    // Auto 读取统一感知器的速度倍率；1.15 倍阈值暂时保持旧策略，后续由阶段 2 技能决策接管。
     const sensed=isRing?updateRingSensor(0,focus):null;
     const decision=isRing?updateRingState(sensed,0,focus):null;
     const preferredRingMode=isRing?decision.mode:null;
+    const regularRels=[];
     const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
-    for(let rel=firstRel;rel<=lastRel;rel+=relStep){
+    for(let rel=firstRel;rel<=lastRel;rel+=relStep)regularRels.push(rel);
+    // 高速捕捉仍瞄准缺口；低速外壁攻击遍历真实外圆弧（含中点与下半部）。
+    const gap=RING_GAP_HALF();
+    const outerAngles=[];
+    if(isRing&&preferredRingMode==='attack'){
+      const begin=-Math.PI/2+gap,finish=3*Math.PI/2-gap,count=96;
+      for(let i=0;i<=count;i++)outerAngles.push(begin+(finish-begin)*i/count);
+    }
+    const candidates=isRing&&preferredRingMode==='attack'
+      ?outerAngles.map(angle=>({angle,outer:true})):regularRels.map(rel=>({rel,outer:false}));
+    for(const candidate of candidates){
+      const outer=isRing&&candidate.outer;
+      const angle=outer?candidate.angle:null;
+      const rel=outer?clamp(((RING_R()+r)*Math.cos(angle))/RING_R(),-.92,.92):candidate.rel;
       if(!isRing&&Math.abs(rel)<.18)continue;
-      if(isRing&&ringAimMode(rel,r)!==preferredRingMode)continue;
-      const offset=isRing?ringAimOffset(rel):rel*paddle.w/2;
-      let candidateX=landX,contactY=surfaceY((rel+1)/2)-r;
-      if(isRing){
+      if(isRing&&!outer&&ringAimMode(rel,r)!==preferredRingMode)continue;
+      const offset=outer?(RING_R()+r)*Math.cos(angle):(isRing?ringAimOffset(rel):rel*paddle.w/2);
+      let candidateX=landX,contactY=surfaceY((rel+1)/2)-r,normalOverride=null,forcedMode=null;
+      if(isRing&&outer){
+        const cy=paddle.y+paddle.h-RING_R();
+        contactY=cy+(RING_R()+r)*Math.sin(angle);
+        if(Math.abs(focus.vy)<.01)continue;
+        const tt=(contactY-focus.y)/focus.vy;
+        if(tt<0)continue;
+        candidateX=reflectScreenX(focus.x+focus.vx*tt,r);
+        normalOverride=ringOuterAimNormal(angle);forcedMode='attack';
+      }else if(isRing){
         contactY=ringAimContactY(rel,r);
         if(focus.vy>.01){
           const tt=Math.max(0,(contactY-focus.y)/focus.vy);
@@ -1660,7 +1670,7 @@
       const want=candidateX-paddle.w/2-offset;
       if(Math.abs(clamp(want,2,W-paddle.w-2)-want)>1)continue;
       const Ux=paddleCommandVelocity(want,paddle.x);
-      const out=isRing?ringAimReflect(focus.vx,focus.vy,rel,Ux,r):paddleReflect(focus.vx,focus.vy,rel,Ux);
+      const out=isRing?ringAimReflect(focus.vx,focus.vy,rel,Ux,r,normalOverride,forcedMode):paddleReflect(focus.vx,focus.vy,rel,Ux);
       const ang=Math.atan2(out.vx,-out.vy);
       if(Math.abs(ang)>1.25)continue;
       const path=predictAttackPath(candidateX,contactY,out.vx,out.vy,r,want,Ux,4);

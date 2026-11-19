@@ -311,6 +311,14 @@ test('inner wall remains a reliable speed-reducing catch through ×80 across obl
   assert.equal(maxReliableRatio,80,'stress-tested reliable range must reach at least ×80');
 });
 
+test('soft inner-wall response limits how much paddle velocity can be transferred', () => {
+  const h=harness();
+  const out=h.ringInnerSoftBounce(-300,0,1,0,900,66,300);
+  assert.ok(Math.hypot(out.vx,out.vy)<=300*.985+1e-6,
+    'a 900px/s paddle must not inject more than the incoming ball speed');
+  assert.ok(out.vx>0,'bounded paddle motion should still steer the ball away from the inner wall');
+});
+
 test('moving paddle cannot turn an inner soft catch into an energy injection', () => {
   const h=harness(),p=h.paddle;
   p.vx=900;
@@ -355,6 +363,7 @@ test('production physics retains bounded soft inner response and accelerated out
   assert.match(innerResponse,/softNormal=-vn\*\.28/);
   assert.match(innerResponse,/softTangent=vt\*\.94/);
   assert.match(innerResponse,/before\*\.985/);
+  assert.ok(innerResponse.includes('baseSpeed()*.4'));
   assert.ok(ringContact.includes('baseSpeed()*.22'));
   assert.ok(ringContact.includes('speedCap=baseSpeed()*1.72'));
   assert.ok(ringContact.includes('Math.min(1.045,speedCap/afterReflect)'));

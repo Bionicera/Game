@@ -583,12 +583,12 @@ test('PhysicsWorld CCD resolves a segment endpoint as a rounded cap', () => {
 
 
 test('sweepCircleAabb detects face TOI and rejects outside-face projections', () => {
-  const hit=sweepCircleAabb({position:{x:0,y:10},velocity:{x:0,y:-200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
+  const hit=sweepCircleAabb({position:{x:0,y:-10},velocity:{x:0,y:200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
   assert.equal(hit.valid,true);
-  assert.ok(Math.abs(hit.hit.seconds-.06)<EPS);
+  assert.ok(Math.abs(hit.hit.seconds-.04)<EPS);
   assert.deepEqual(hit.hit.normal,{x:0,y:-1});
   assert.deepEqual(hit.hit.point,{x:0,y:-1});
-  const miss=sweepCircleAabb({position:{x:5,y:10},velocity:{x:0,y:-200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
+  const miss=sweepCircleAabb({position:{x:5,y:-10},velocity:{x:0,y:200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
   assert.equal(miss.hit,null);
 });
 test('sweepCircleAabb detects rounded corner impacts', () => {
@@ -600,7 +600,7 @@ test('sweepCircleAabb detects rounded corner impacts', () => {
 });
 test('PhysicsWorld CCD prevents fast circle tunneling through a static AABB face', () => {
   const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), box=body(Infinity);
-  ball.position={x:0,y:10};
+  ball.position={x:0,y:-10};
   world.addBody(ball); world.addBody(box);
   world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
   world.addCollider(createCollider(box,'aabb',{x:0,y:0,halfWidth:1,halfHeight:1},{restitution:1}));

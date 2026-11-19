@@ -117,6 +117,124 @@ function createCollider(body,shape,geometry={},material={}) {
   return {body,shape,geometry:g,material:{restitution,friction}};
 }
 
+function closestPointOnSegment(point,a,b) {
+  const ab=subtract(b,a);
+  const lengthSquared=dot(ab,ab);
+  const t=Math.max(0,Math.min(1,dot(subtract(point,a),ab)/lengthSquared));
+  return add(a,scale(ab,t));
+}
+
+function circleContact(circleCollider,otherCollider) {
+  const center=circleCollider.body.position;
+  const radius=circleCollider.geometry.radius;
+  const other=otherCollider.geometry;
+  const otherBody=otherCollider.body;
+  let normal,point,penetration,featureId;
+  if (otherCollider.shape==='circle') {
+    const delta=subtract(center,otherBody.position);
+    const distance=Math.hypot(delta.x,delta.y);
+    penetration=radius+other.radius-distance;
+    if (!(penetration>0)) return null;
+    normal=distance>EPSILON?scale(delta,1/distance):{x:1,y:0};
+    point=subtract(center,scale(normal,radius));
+    featureId='circle-circle';
+  } else if (otherCollider.shape==='plane') {
+    const distance=dot(center,other.normal)-other.offset;
+    penetration=radius-distance;
+    if (!(penetration>0)) return null;
+    normal=other.normal;
+    point=subtract(center,scale(normal,distance));
+    featureId='circle-plane';
+  } else if (otherCollider.shape==='aabb') {
+    const closest={
+      x:Math.max(other.x-other.halfWidth,Math.min(other.x+other.halfWidth,center.x)),
+      y:Math.max(other.y-other.halfHeight,Math.min(other.y+other.halfHeight,center.y))
+    };
+    const delta=subtract(center,closest);
+    const distance=Math.hypot(delta.x,delta.y);
+    if (distance>EPSILON) {
+      penetration=radius-distance;
+      if (!(penetration>0)) return null;
+      normal=scale(delta,1/distance);
+      point=closest;
+      featureId='circle-aabb-face';
+    } else {
+      const faces=[
+        {distance:center.x-(other.x-other.halfWidth),normal:{x:-1,y:0},point:{x:other.x-other.halfWidth,y:center.y},id:'left'},
+        {distance:other.x+other.halfWidth-center.x,normal:{x:1,y:0},point:{x:other.x+other.halfWidth,y:center.y},id:'right'},
+        {distance:center.y-(other.y-other.halfHeight),normal:{x:0,y:-1},point:{x:center.x,y:other.y-other.halfHeight},id:'top'},
+        {distance:other.y+other.halfHeight-center.y,normal:{x:0,y:1},point:{x:center.x,y:other.y+other.halfHeight},id:'bottom'}
+      ];
+      faces.sort((a,b)=>a.distance-b.distance);
+      normal=faces[0].normal;
+      point=faces[0].point;
+      penetration=radius+faces[0].distance;
+      featureId='circle-aabb-'+faces[0].id;
+    }
+  } else if (otherCollider.shape==='segment') {
+    point=closestPointOnSegment(center,other.a,other.b);
+    const delta=subtract(center,point);
+    const distance=Math.hypot(delta.x,delta.y);
+    penetration=radius-distance;
+    if (!(penetration>0)) return null;
+    if (distance>EPSILON) normal=scale(delta,1/distance);
+    else {
+      const edge=subtract(other.b,other.a);
+      const length=Math.hypot(edge.x,edge.y);
+      normal={x:-edge.y/length,y:edge.x/length};
+    }
+    featureId='circle-segment';
+  } else return null;
+
+  const contact=createContact({
+    bodyA:circleCollider.body,bodyB:otherBody,point,normal,penetration,toi:null,
+    surfaceVelocity:otherBody.surfaceVelocity || {x:0,y:0},featureId,
+    material:{
+      restitution:Math.min(circleCollider.material.restitution,otherCollider.material.restitution),
+      friction:Math.sqrt(circleCollider.material.friction*otherCollider.material.friction)
+    }
+  });
+  if (!contact.valid) return {valid:false,reason:contact.reason};
+  return contact.contact;
+}
+
+function detectContacts(colliders) {
+  if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',contacts:[]};
+  const contacts=[];
+  for(let i=0;i<colliders.length;i++) {
+    const a=colliders[i];
+    if(!a || !a.body || !['circle','plane','aabb','segment'].includes(a.shape)) {
+      return {valid:false,reason:'invalid-collider',contacts:[]};
+    }
+    for(let j=i+1;j<colliders.length;j++) {
+      const b=colliders[j];
+      if(!b || !b.body || !['circle','plane','aabb','segment'].includes(b.shape)) {
+        return {valid:false,reason:'invalid-collider',contacts:[]};
+      }
+      if(a.body===b.body || (a.body.invMass===0 && b.body.invMass===0)) continue;
+      let contact=null;
+      if(a.shape==='circle') {
+        contact=circleContact(a,b);
+      } else if(b.shape==='circle') {
+        const reversed=circleContact(b,a);
+        if(reversed) {
+          const result=createContact({
+            bodyA:reversed.bodyB,bodyB:reversed.bodyA,point:reversed.point,
+            normal:scale(reversed.normal,-1),penetration:reversed.penetration,toi:reversed.toi,
+            surfaceVelocity:reversed.bodyB.surfaceVelocity || {x:0,y:0},
+            featureId:reversed.featureId,material:reversed.material
+          });
+          if(!result.valid) return {valid:false,reason:result.reason,contacts:[]};
+          contact=result.contact;
+        }
+      }
+      if(contact && contact.valid===false) return {valid:false,reason:contact.reason,contacts:[]};
+      if(contact) contacts.push(contact);
+    }
+  }
+  return {valid:true,contacts};
+}
+
 function createContactTelemetry(bodyA,bodyB,contact,result,energyBefore) {
   if (!result || !result.valid) return {valid:false,reason:result?.reason || 'invalid-solver-result'};
   const energyAfter = kineticEnergy(bodyA)+kineticEnergy(bodyB);
@@ -325,4 +443,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

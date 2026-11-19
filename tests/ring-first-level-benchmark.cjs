@@ -11,17 +11,13 @@ const bridge="\n  const __bench={events:[],won:false,restarted:false};\n  const 
   const seeds=(process.env.RING_BENCH_SEEDS||'101,202').split(',').map(Number).filter(Number.isFinite);
   const positions=['center','left','right'];
   const maxSeconds=Math.max(30,Number(process.env.RING_BENCH_MAX_SECONDS)||90);
-  const html=source.replace(marker,bridge+'\n'+marker);
   const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
   const results=[];
   try{
     for(const seed of seeds)for(const position of positions){
       const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1});
-      await page.addInitScript(({seed})=>{
-        let s=seed>>>0;
-        Math.random=()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};
-        window.requestAnimationFrame=()=>0;
-      },{seed});
+      const seedBoot="(()=>{let s="+(seed>>>0)+";Math.random=()=>{s=(Math.imul(s,1664525)+1013904223)>>>0;return s/4294967296;};})();window.requestAnimationFrame=()=>0;";
+      const html=source.replace('<script>','<script>'+seedBoot).replace(marker,bridge+'\n'+marker);
       const errors=[];
       page.on('pageerror',e=>errors.push(e.message));
       await page.setContent(html,{waitUntil:'load'});

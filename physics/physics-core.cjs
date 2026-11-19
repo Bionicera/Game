@@ -615,7 +615,7 @@ class PhysicsWorld {
           const input={position:circle.body.position,velocity:circle.body.velocity,radius:circle.geometry.radius,dt:remaining};
           let hit;
           if (other.shape==='circle') {
-            if (otherIndex<=this.colliders.indexOf(circle) ||
+            if ((other.body.invMass!==0 && otherIndex<=this.colliders.indexOf(circle)) ||
                 (other.body.invMass===0 && (other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0)) ||
                 (other.body.invMass===0 && circle.body.invMass===0)) continue;
             hit=sweepCircleCircle({

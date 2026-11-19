@@ -198,6 +198,29 @@ function circleContact(circleCollider,otherCollider) {
   return contact.contact;
 }
 
+function sweepCirclePlane({position,velocity,radius,normal,offset,dt}={}) {
+  if (!isFiniteVector(position) || !isFiniteVector(velocity) ||
+      !isFiniteVector(normal) || !(radius>0) || !Number.isFinite(radius) ||
+      !Number.isFinite(offset) || !(dt>0) || !Number.isFinite(dt)) {
+    return {valid:false,reason:'invalid-sweep-input',hit:null};
+  }
+  const length=Math.hypot(normal.x,normal.y);
+  if (!Number.isFinite(length) || length<EPSILON) return {valid:false,reason:'degenerate-sweep-normal',hit:null};
+  const n=scale(normal,1/length), planeOffset=offset/length;
+  const distance=dot(position,n)-planeOffset;
+  const normalSpeed=dot(velocity,n);
+  if (distance<radius-EPSILON || normalSpeed>=-EPSILON) return {valid:true,hit:null};
+  const seconds=(radius-distance)/normalSpeed;
+  if (seconds<-EPSILON || seconds>dt+EPSILON) return {valid:true,hit:null};
+  const time=Math.max(0,Math.min(dt,seconds));
+  const center=add(position,scale(velocity,time));
+  return {valid:true,hit:{
+    seconds:time,toi:time/dt,center,
+    point:subtract(center,scale(n,radius)),normal:n,
+    featureId:'circle-plane'
+  }};
+}
+
 function detectContacts(colliders) {
   if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',contacts:[]};
   const contacts=[];
@@ -432,14 +455,73 @@ class PhysicsWorld {
       }
     }
 
+    // Apply forces for the full step first, then advance positions through
+    // earliest circle-vs-static-plane impacts to prevent thin-plane tunneling.
     for (const body of this.bodies) {
       if (body.invMass===0) continue;
-      const candidate={...body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}};
-      const result=integrateBody(candidate,dt);
-      if (!result.valid) { rollback(); return {valid:false,reason:result.reason}; }
-      body.position=candidate.position;
-      body.velocity=candidate.velocity;
-      body.force=candidate.force;
+      if (!isFiniteVector(body.position) || !isFiniteVector(body.velocity) || !isFiniteVector(body.force)) {
+        rollback(); return {valid:false,reason:'invalid-integration-input'};
+      }
+      const nextVelocity=add(body.velocity,scale(body.force,body.invMass*dt));
+      if (!isFiniteVector(nextVelocity)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
+      body.velocity=nextVelocity;
+      body.force={x:0,y:0};
+    }
+
+    let remaining=dt, elapsed=0, ccdEvents=0;
+    const sweptContacts=[];
+    while (remaining>EPSILON) {
+      let earliest=null;
+      for (const circle of this.colliders) {
+        if (circle.shape!=='circle' || circle.body.invMass===0) continue;
+        for (const plane of this.colliders) {
+          if (plane.shape!=='plane' || plane.body===circle.body ||
+              plane.body.invMass!==0 || plane.body.surfaceVelocity.x!==0 || plane.body.surfaceVelocity.y!==0) continue;
+          const hit=sweepCirclePlane({
+            position:circle.body.position,velocity:circle.body.velocity,
+            radius:circle.geometry.radius,normal:plane.geometry.normal,
+            offset:plane.geometry.offset,dt:remaining
+          });
+          if (!hit.valid) { rollback(); return hit; }
+          if (hit.hit && (!earliest || hit.hit.seconds<earliest.hit.seconds)) earliest={circle,plane,hit:hit.hit};
+        }
+      }
+      if (!earliest) {
+        for (const body of this.bodies) if (body.invMass!==0) {
+          body.position=add(body.position,scale(body.velocity,remaining));
+          if (!isFiniteVector(body.position)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
+        }
+        elapsed+=remaining; remaining=0;
+        break;
+      }
+      if (ccdEvents>=16) { rollback(); return {valid:false,reason:'ccd-event-limit'}; }
+      const advance=earliest.hit.seconds;
+      for (const body of this.bodies) if (body.invMass!==0) {
+        body.position=add(body.position,scale(body.velocity,advance));
+        if (!isFiniteVector(body.position)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
+      }
+      earliest.circle.body.position={...earliest.hit.center};
+      const contactResult=createContact({
+        bodyA:earliest.circle.body,bodyB:earliest.plane.body,
+        point:earliest.hit.point,normal:earliest.hit.normal,penetration:0,
+        toi:(elapsed+advance)/dt,featureId:earliest.hit.featureId,
+        surfaceVelocity:{x:0,y:0},
+        material:{
+          restitution:Math.min(earliest.circle.material.restitution,earliest.plane.material.restitution),
+          friction:Math.sqrt(earliest.circle.material.friction*earliest.plane.material.friction)
+        }
+      });
+      if (!contactResult.valid) { rollback(); return {valid:false,reason:contactResult.reason}; }
+      const solved=solveContact(contactResult.contact.bodyA,contactResult.contact.bodyB,
+        contactResult.contact.normal,contactResult.contact.material);
+      if (!solved.valid) { rollback(); return {valid:false,reason:'contact-solver-failed',featureId:contactResult.contact.featureId}; }
+      contactResult.contact.normalImpulse=solved.normalImpulse||0;
+      contactResult.contact.tangentImpulse=solved.tangentImpulse||0;
+      sweptContacts.push(contactResult.contact);
+      ccdEvents++;
+      elapsed+=advance;
+      remaining=Math.max(0,dt-elapsed);
+      if (advance<=EPSILON && !solved.applied) { rollback(); return {valid:false,reason:'ccd-zero-time-stall'}; }
     }
 
     const detected=detectContacts(this.colliders);
@@ -472,7 +554,7 @@ class PhysicsWorld {
     this.stepCount++;
     return {
       valid:true,stepCount:this.stepCount,bodyCount:this.bodies.length,
-      colliderCount:this.colliders.length,contactCount:detected.contacts.length,contacts:detected.contacts
+      colliderCount:this.colliders.length,contactCount:detected.contacts.length+sweptContacts.length,ccdEventCount:ccdEvents,contacts:[...sweptContacts,...detected.contacts]
     };
   }
 }
@@ -521,4 +603,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {sweepCirclePlane,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

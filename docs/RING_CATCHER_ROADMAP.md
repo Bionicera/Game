@@ -646,8 +646,10 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 - [x] 建立独立 PhysicsWorld Body 注册表、确定性力生成器顺序与原子世界步进预检（原型，不含碰撞管线）。
 - [x] 建立可配置 FixedStepRunner；超出单帧追赶上限的时间保留并显式报告，不静默丢弃。
-- [x] 新增 World/Runner 生命周期、确定性、积压、暂停与数值失败测试；CI 状态待本轮 Actions 完成确认。
-- [ ] 实现统一接触集合、碰撞检测与求解调度；当前 World 不含几何/碰撞系统。
+- [x] 新增 World/Runner 生命周期、确定性、积压、暂停与数值失败测试；PhysicsWorld/Runner 已由主线 CI 覆盖。
+- [x] 建立 `createContact` 数据契约：验证 Body 身份、有限接触向量、单位 B→A 法线、非负穿透、归一化 TOI、featureId 与材质系数。
+- [x] 为 Contact 契约新增 4 项真实模块测试；主线 `physics-core` Job 29/29 通过（run 44447477875）。
+- [ ] 建立 Collider 几何接口与接触集合；当前 World 尚未注册 Collider，也未调度几何检测。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -763,6 +765,14 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - 仍未建立 World、固定步累积器、TOI、多接触求解和几何模块；本次没有改生产游戏文件。
 
 - P2 力积分/遥测回归：`physics-core` Job 16/16 通过（[Actions run 44443212807](https://github.com/Bionicera/Game/actions/runs/44443212807)）。当前证据仅覆盖单体半隐式积分与单接触求解，不代表完整世界步进或生产物理验证。
+
+
+### 2026-11-19 · P2 Contact 数据契约
+- 在主线 `physics/physics-core.cjs` 新增 `createContact`：统一验证 bodyA/bodyB 身份、point/normal/surfaceVelocity 有限性、B→A 法线归一化、非负 penetration、TOI 区间、featureId 与 restitution/friction 材质边界。
+- `tests/physics-core.test.cjs` 新增 4 项契约测试，覆盖合法字段/法线归一化、退化法线与非法向量、穿透/TOI 越界、重复 Body 与非法材质。
+- 主线 `physics-core` CI Job 29/29 通过，Actions run [44447477875](https://github.com/Bionicera/Game/actions/runs/44447477875)。该结论仅代表物理内核单测 Job；同一工作流中的浏览器 Smoke、第一关 benchmark 仍需分别核对最终状态。
+- 本轮只改独立物理原型、测试与文档；未修改 `Portrait Breakout.html`，未接入生产循环，不发布、不部署。
+- 下一步：实现 Collider 描述与静态几何窄相位，之后建立确定性 Contact 集合；暂不做生产迁移。
 
 
 ### 2026-11-19 · P2 PhysicsWorld 与固定步调度

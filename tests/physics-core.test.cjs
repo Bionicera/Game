@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {createBody,kineticEnergy,linearMomentum,solveContact} = require('../physics/physics-core.cjs');
+const {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -95,4 +95,46 @@ test('normal orientation is scale-invariant and normalized internally', () => {
   const a=body(1,{x:4,y:0}), wall=body(Infinity,{x:0,y:0});
   resolve(a,wall,{x:-10,y:0},{restitution:1});
   assert.equal(a.velocity.x,-4);
+});
+
+test('force integration uses semi-implicit Euler and clears accumulated force', () => {
+  const b=body(2,{x:1,y:0}); b.position={x:0,y:0};
+  assert.equal(applyForce(b,{x:4,y:0}),true);
+  const r=integrateBody(b,.5);
+  assert.equal(r.valid,true);
+  assert.ok(Math.abs(b.velocity.x-2)<EPS);
+  assert.ok(Math.abs(b.position.x-1)<EPS);
+  assert.deepEqual(b.force,{x:0,y:0});
+});
+test('static and kinematic bodies reject force and impulse mutation', () => {
+  const wall=body(Infinity,{x:0,y:0});
+  assert.equal(applyForce(wall,{x:10,y:0}),false);
+  assert.equal(applyImpulse(wall,{x:10,y:0}),false);
+  assert.deepEqual(wall.velocity,{x:0,y:0});
+});
+test('impulse changes dynamic momentum by exactly the applied impulse', () => {
+  const b=body(4,{x:1,y:2}), before=momentum(b);
+  assert.equal(applyImpulse(b,{x:8,y:-4}),true);
+  const after=momentum(b);
+  assert.ok(Math.abs(after.x-before.x-8)<EPS);
+  assert.ok(Math.abs(after.y-before.y+4)<EPS);
+});
+test('contact telemetry records energy delta and impulse result', () => {
+  const ball=body(1,{x:2,y:0}), wall=body(Infinity,{x:0,y:0});
+  const before=kinetic(ball)+kinetic(wall);
+  const result=solveContact(ball,wall,{x:-1,y:0},{restitution:0});
+  const log=createContactTelemetry(ball,wall,{point:{x:5,y:3}},result,before);
+  assert.equal(log.valid,true);
+  assert.equal(log.normalImpulse,2);
+  assert.equal(log.kineticEnergyBefore,2);
+  assert.equal(log.kineticEnergyAfter,0);
+  assert.equal(log.kineticEnergyDelta,-2);
+  assert.deepEqual(log.point,{x:5,y:3});
+});
+test('invalid dt or non-finite accumulated force fails without corrupting body', () => {
+  const b=body(1,{x:1,y:2}); b.position={x:3,y:4};
+  assert.equal(integrateBody(b,-1).valid,false);
+  b.force.x=Infinity;
+  assert.equal(integrateBody(b,.1).valid,false);
+  assert.deepEqual(b.position,{x:3,y:4});
 });

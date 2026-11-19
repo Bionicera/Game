@@ -658,8 +658,8 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] PhysicsWorld 支持可配置 1–32 轮顺序冲量迭代，累计各轮冲量并在求解后单独做位置修正。
 - [x] 新增 Contact 集合与多接触角点测试；主线 `physics-core` Job 46/46 通过（run 44448597608）。
 - [ ] 实现 broad phase；当前仍为全量 Collider 配对检测。
-- [x] 实现 Circle-Plane TOI/CCD：高速圆球按最早撞击时刻推进剩余时间，避免穿越无限静态平面；每步最多处理 16 次扫掠碰撞，超限则原子回滚。
-- [ ] 扩展 TOI/CCD 至 Segment/AABB/Circle，以及运动学移动边界；当前 CCD 仅覆盖动态 Circle 对静止 Plane。
+- [x] 实现 Circle-Plane、Circle-Segment、Circle-AABB TOI/CCD：覆盖线段侧面/圆端帽、AABB 四个面/圆角；按最早撞击时刻推进剩余时间。
+- [ ] 扩展 TOI/CCD 至 Circle-Circle 与运动学移动边界；当前 CCD 仅覆盖动态 Circle 对静止 Plane/Segment/AABB。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
 
 ### P3 — 几何与接触检测统一
@@ -777,6 +777,14 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - P2 力积分/遥测回归：`physics-core` Job 16/16 通过（[Actions run 44443212807](https://github.com/Bionicera/Game/actions/runs/44443212807)）。当前证据仅覆盖单体半隐式积分与单接触求解，不代表完整世界步进或生产物理验证。
 
 
+
+
+### 2026-11-19 · P2 TOI/CCD 扩展（Circle–Segment / Circle–AABB）
+- 新增 sweepCircleSegment：有限线段侧面与两端圆帽分别计算 TOI，线段外延不会被误当成无限墙。
+- 新增 sweepCircleAabb：矩形四个面与四个圆角分别计算 TOI；面命中必须落在有限边段投影范围内，角点采用径向法线。
+- PhysicsWorld CCD 调度扩展至动态 Circle 对静止 Plane/Segment/AABB，仍以全局最早 TOI 为先；接触继续走统一 createContact/solveContact。
+- 新增 8 项扫掠几何与 World 防穿透测试，覆盖 Segment 端帽、AABB 圆角和有限边界。主线 physics-core Job 59/59 通过，Actions run [44450363755](https://github.com/Bionicera/Game/actions/runs/44450363755)。
+- 本轮仍仅修改独立内核、测试和路线图；生产代码未迁移。Circle-Circle TOI、运动学移动几何、广相位和真实第一关验收仍未完成。
 
 ### 2026-11-19 · P2 首轮 TOI/CCD（Circle–Plane）
 - 新增纯几何 sweepCirclePlane：输入起点、速度、半径、平面与 dt，返回归一化 TOI、撞击圆心、接触点及 B→A 法线；无接近、无穿越和初始重叠路径不伪造扫掠命中。

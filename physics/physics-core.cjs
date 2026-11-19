@@ -146,7 +146,7 @@ function createCollider(body, shape, geometry={}, material={}) {
   if (shape==='plane') {
     const length=isFiniteVector(g.normal)?Math.hypot(g.normal.x,g.normal.y):NaN;
     if (!Number.isFinite(length) || length<EPSILON || !Number.isFinite(g.offset)) throw new TypeError('plane requires finite normal and offset');
-    g.normal=scale(g.normal,1/length);
+    g.normal=scale(g.normal,1/length); g.offset/=length;
   }
   if (shape==='aabb' && (!(g.halfWidth>0) || !(g.halfHeight>0) || !Number.isFinite(g.x) || !Number.isFinite(g.y) || !Number.isFinite(g.halfWidth) || !Number.isFinite(g.halfHeight))) throw new TypeError('aabb requires finite center and positive half extents');
   if (shape==='segment' && (!isFiniteVector(g.a) || !isFiniteVector(g.b) || Math.hypot(g.b.x-g.a.x,g.b.y-g.a.y)<EPSILON)) throw new TypeError('segment requires distinct finite endpoints');

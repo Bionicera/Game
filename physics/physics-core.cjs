@@ -60,6 +60,32 @@ function integrateBody(body, dt) {
   return {valid:true,acceleration};
 }
 
+function createContact({bodyA,bodyB,point,normal,penetration=0,toi=null,surfaceVelocity={x:0,y:0},featureId,material={}}={}) {
+  const invalid = reason => ({valid:false,reason,contact:null});
+  if (!bodyA || !bodyB || bodyA===bodyB ||
+      ![bodyA,bodyB].every(body => Number.isFinite(body.invMass) && body.invMass>=0 &&
+        (body.mass>0 || body.mass===Infinity))) return invalid('invalid-contact-bodies');
+  if (!isFiniteVector(point) || !isFiniteVector(normal) || !isFiniteVector(surfaceVelocity)) {
+    return invalid('invalid-contact-vectors');
+  }
+  const normalLength=Math.hypot(normal.x,normal.y);
+  if (!Number.isFinite(normalLength) || normalLength<EPSILON) return invalid('degenerate-contact-normal');
+  if (!Number.isFinite(penetration) || penetration<0) return invalid('invalid-contact-penetration');
+  if (toi!==null && (!Number.isFinite(toi) || toi<0 || toi>1)) return invalid('invalid-contact-toi');
+  if (typeof featureId!=='string' || featureId.length===0) return invalid('invalid-contact-feature-id');
+  const restitution=material.restitution ?? 1, friction=material.friction ?? 0;
+  if (!Number.isFinite(restitution) || restitution<0 || restitution>1 ||
+      !Number.isFinite(friction) || friction<0) return invalid('invalid-contact-material');
+  return {
+    valid:true,
+    contact:{
+      bodyA,bodyB,point:{...point},normal:scale(normal,1/normalLength),penetration,toi,
+      surfaceVelocity:{...surfaceVelocity},featureId,
+      material:{restitution,friction}
+    }
+  };
+}
+
 function createContactTelemetry(bodyA,bodyB,contact,result,energyBefore) {
   if (!result || !result.valid) return {valid:false,reason:result?.reason || 'invalid-solver-result'};
   const energyAfter = kineticEnergy(bodyA)+kineticEnergy(bodyB);
@@ -268,4 +294,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

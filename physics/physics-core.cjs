@@ -376,12 +376,21 @@ function colliderBounds(collider) {
   return {minX:-Infinity,maxX:Infinity,minY:-Infinity,maxY:Infinity};
 }
 
-function buildBroadPhasePairs(colliders) {
+function buildBroadPhasePairs(colliders,{sweepDt=0}={}) {
+  if (!(sweepDt>=0) || !Number.isFinite(sweepDt)) return {valid:false,reason:'invalid-broad-phase-dt',pairs:[]};
   if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',pairs:[]};
   const entries=[];
   for (let i=0;i<colliders.length;i++) {
-    const bounds=colliderBounds(colliders[i]);
+    const collider=colliders[i];
+    const bounds=colliderBounds(collider);
     if (!bounds) return {valid:false,reason:'invalid-collider',pairs:[]};
+    if (sweepDt>0 && collider.shape==='circle' && collider.body.invMass>0) {
+      const end=add(collider.body.position,scale(collider.body.velocity,sweepDt));
+      if (!isFiniteVector(end)) return {valid:false,reason:'invalid-swept-bounds',pairs:[]};
+      const r=collider.geometry.radius;
+      bounds.minX=Math.min(bounds.minX,end.x-r); bounds.maxX=Math.max(bounds.maxX,end.x+r);
+      bounds.minY=Math.min(bounds.minY,end.y-r); bounds.maxY=Math.max(bounds.maxY,end.y+r);
+    }
     entries.push({index:i,...bounds});
   }
   entries.sort((a,b)=>a.minX-b.minX || a.index-b.index);
@@ -644,33 +653,37 @@ class PhysicsWorld {
     const sweptContacts=[];
     while (remaining>EPSILON) {
       let earliest=null;
-      for (const circle of this.colliders) {
-        if (circle.shape!=='circle' || circle.body.invMass===0) continue;
-        for (let otherIndex=0;otherIndex<this.colliders.length;otherIndex++) {
-          const other=this.colliders[otherIndex];
-          if (other.body===circle.body) continue;
-          const input={position:circle.body.position,velocity:circle.body.velocity,radius:circle.geometry.radius,dt:remaining};
-          let hit;
-          if (other.shape==='circle') {
-            if ((other.body.invMass!==0 && otherIndex<=this.colliders.indexOf(circle)) ||
-                (other.body.invMass===0 && (other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0)) ||
-                (other.body.invMass===0 && circle.body.invMass===0)) continue;
-            hit=sweepCircleCircle({
-              positionA:circle.body.position,velocityA:circle.body.velocity,radiusA:circle.geometry.radius,
-              positionB:other.body.position,velocityB:other.body.velocity,radiusB:other.geometry.radius,dt:remaining
-            });
-          } else {
-            if (!['plane','segment','aabb'].includes(other.shape) ||
-                other.body.invMass!==0 || other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0) continue;
-            hit=other.shape==='plane'
-              ? sweepCirclePlane({...input,normal:other.geometry.normal,offset:other.geometry.offset})
-              : other.shape==='segment'
-                ? sweepCircleSegment({...input,a:other.geometry.a,b:other.geometry.b})
-                : sweepCircleAabb({...input,...other.geometry});
-          }
-          if (!hit.valid) { rollback(); return hit; }
-          if (hit.hit && (!earliest || hit.hit.seconds<earliest.hit.seconds)) earliest={circle,other,hit:hit.hit};
+      const candidates=buildBroadPhasePairs(this.colliders,{sweepDt:remaining});
+      if (!candidates.valid) { rollback(); return candidates; }
+      for (const [i,j] of candidates.pairs) {
+        const a=this.colliders[i], b=this.colliders[j];
+        let circle, other;
+        if (a.shape==='circle' && a.body.invMass>0) { circle=a; other=b; }
+        else if (b.shape==='circle' && b.body.invMass>0) { circle=b; other=a; }
+        else continue;
+        if (other.body===circle.body) continue;
+        const input={position:circle.body.position,velocity:circle.body.velocity,radius:circle.geometry.radius,dt:remaining};
+        let hit;
+        if (other.shape==='circle') {
+          if (other.body.invMass===0 && (other.body.velocity.x!==0 || other.body.velocity.y!==0 ||
+              other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0)) continue;
+          if (other.body.invMass===0 && circle.body.invMass===0) continue;
+          hit=sweepCircleCircle({
+            positionA:circle.body.position,velocityA:circle.body.velocity,radiusA:circle.geometry.radius,
+            positionB:other.body.position,velocityB:other.body.velocity,radiusB:other.geometry.radius,dt:remaining
+          });
+        } else {
+          if (!['plane','segment','aabb'].includes(other.shape) || other.body.invMass!==0 ||
+              other.body.velocity.x!==0 || other.body.velocity.y!==0 ||
+              other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0) continue;
+          hit=other.shape==='plane'
+            ? sweepCirclePlane({...input,normal:other.geometry.normal,offset:other.geometry.offset})
+            : other.shape==='segment'
+              ? sweepCircleSegment({...input,a:other.geometry.a,b:other.geometry.b})
+              : sweepCircleAabb({...input,...other.geometry});
         }
+        if (!hit.valid) { rollback(); return hit; }
+        if (hit.hit && (!earliest || hit.hit.seconds<earliest.hit.seconds)) earliest={circle,other,hit:hit.hit};
       }
       if (!earliest) {
         for (const body of this.bodies) if (body.invMass!==0) {

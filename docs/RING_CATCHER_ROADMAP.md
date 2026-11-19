@@ -440,9 +440,9 @@ RingState 已与 RingPlanner / RingSkills 分离。SAFE_CATCH 由底部接球 ET
 - Commit：e3ea27571132d9dfea3f89e3ecd312cd5451c2e1（生产）；1b580f8d86c830be334c6da9aa190f36f288a48a（测试）。
 
 
-### 2026-11-19 · 甩球释放阶段去重（开发验证待 CI）
+### 2026-11-19 · 甩球释放阶段去重（开发侧回归通过）
 - 代码审查确认 release 阶段同时维护 phaseTime 与 releaseTimer 两个计时器，但 phaseTime 的通用阶段超时先于 releaseTimer 分支执行，后者实际上不可达。
 - 删除不可达的 releaseTimer 状态与分支，释放等待统一由现有 phaseTime / 0.48 秒阶段上限负责；超时仍进入冷却，不改变真实碰撞释放。
 - 新增单测验证释放阶段使用唯一计时器并在超时后进入冷却。
-- 这是纯去重，不改变甩球速度、角度、震荡或短冲参数。CI 待本次提交完成后确认。
+- 这是纯去重，不改变甩球速度、角度、震荡或短冲参数。CI 结果：Node.js 70/70 通过；Chromium Browser smoke 通过，包含完整甩球流程与 30 秒实时 Auto 压力场景（[run 44425457010](https://github.com/Bionicera/Game/actions/runs/44425457010)）。
 - Commit：599a1be1407643b71cf02b42c9fa51bf03ba3d40（生产）；c6ff004f664d684b84892df7be29525edf7d50f9（测试）。

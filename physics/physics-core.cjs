@@ -228,7 +228,7 @@ function sweepCircleSegment({position,velocity,radius,a,b,dt}={}) {
   }
   const edge=subtract(b,a), length=Math.hypot(edge.x,edge.y);
   if (!Number.isFinite(length) || length<EPSILON) return {valid:false,reason:'degenerate-sweep-segment',hit:null};
-  const tangent=scale(edge,1/length), baseNormal={x:-tangent.y,y:tangent.x};
+  const tangent=scale(edge,1/length), baseNormal={x:tangent.y===0?0:-tangent.y,y:tangent.x===0?0:tangent.x};
   const closest=closestPointOnSegment(position,a,b);
   const initialDelta=subtract(position,closest), initialDistance=Math.hypot(initialDelta.x,initialDelta.y);
   if (initialDistance<radius-EPSILON) return {valid:true,hit:null};
@@ -236,7 +236,7 @@ function sweepCircleSegment({position,velocity,radius,a,b,dt}={}) {
   const signedDistance=dot(subtract(position,a),baseNormal);
   const normalSpeed=dot(velocity,baseNormal);
   for (const side of [1,-1]) {
-    const outward=scale(baseNormal,side), speed=normalSpeed*side;
+    const rawOutward=scale(baseNormal,side), outward={x:rawOutward.x===0?0:rawOutward.x,y:rawOutward.y===0?0:rawOutward.y}, speed=normalSpeed*side;
     if (speed>=-EPSILON) continue;
     const seconds=(radius-signedDistance*side)/speed;
     if (seconds<-EPSILON || seconds>dt+EPSILON) continue;

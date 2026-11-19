@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {sweepCirclePlane,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -468,4 +468,69 @@ test('invalid frame and world time steps fail closed without advancing state', (
   assert.equal(runner.advance(Infinity).valid,false);
   assert.equal(world.step(NaN).valid,false);
   assert.deepEqual(b.position,{x:0,y:0});
+});
+
+
+test('sweepCirclePlane reports normalized time and exact impact geometry', () => {
+  const result=sweepCirclePlane({
+    position:{x:3,y:10},velocity:{x:0,y:-200},radius:1,
+    normal:{x:0,y:2},offset:0,dt:.1
+  });
+  assert.equal(result.valid,true);
+  assert.ok(Math.abs(result.hit.seconds-.045)<EPS);
+  assert.ok(Math.abs(result.hit.toi-.45)<EPS);
+  assert.deepEqual(result.hit.center,{x:3,y:1});
+  assert.deepEqual(result.hit.point,{x:3,y:0});
+  assert.deepEqual(result.hit.normal,{x:0,y:1});
+});
+test('sweepCirclePlane ignores separating, non-crossing and initially overlapping paths', () => {
+  const base={position:{x:0,y:3},radius:1,normal:{x:0,y:1},offset:0,dt:.1};
+  assert.equal(sweepCirclePlane({...base,velocity:{x:0,y:2}}).hit,null);
+  assert.equal(sweepCirclePlane({...base,velocity:{x:0,y:-5}}).hit,null);
+  assert.equal(sweepCirclePlane({...base,position:{x:0,y:.5},velocity:{x:0,y:-10}}).hit,null);
+  assert.equal(sweepCirclePlane({...base,velocity:{x:0,y:-30}}).hit.toi,.6666666666666666);
+});
+test('PhysicsWorld CCD prevents a fast circle tunneling through a static plane', () => {
+  for (const dt of [.05,.1,.2]) {
+    const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), wall=body(Infinity);
+    ball.position={x:2,y:dt*200+1};
+    world.addBody(ball); world.addBody(wall);
+    world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+    world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
+    const result=world.step(dt);
+    assert.equal(result.valid,true);
+    assert.equal(result.ccdEventCount,1);
+    assert.ok(ball.position.y>=1-EPS);
+    assert.ok(ball.velocity.y>0);
+    assert.ok(Math.abs(ball.position.y-(1+dt*200))<1e-7);
+  }
+});
+test('PhysicsWorld CCD respects restitution and reports swept contact metadata', () => {
+  const world=new PhysicsWorld(), ball=body(2,{x:0,y:-100}), wall=body(Infinity);
+  ball.position={x:0,y:6};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:.5}));
+  world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0},{restitution:.5}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.equal(result.contactCount,1);
+  assert.equal(result.contacts[0].toi,.5);
+  assert.ok(Math.abs(ball.velocity.y-50)<EPS);
+  assert.ok(Math.abs(ball.position.y-3.5)<EPS);
+});
+test('PhysicsWorld rolls back the whole step when CCD exceeds its event safety limit', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-1e6}), wall=body(Infinity);
+  ball.position={x:0,y:1};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1}));
+  world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0}));
+  const before={position:{...ball.position},velocity:{...ball.velocity},force:{...ball.force}};
+  const result=world.step(.1);
+  assert.equal(result.valid,false);
+  assert.equal(result.reason,'ccd-event-limit');
+  assert.deepEqual(ball.position,before.position);
+  assert.deepEqual(ball.velocity,before.velocity);
+  assert.deepEqual(ball.force,before.force);
+  assert.equal(world.stepCount,0);
 });

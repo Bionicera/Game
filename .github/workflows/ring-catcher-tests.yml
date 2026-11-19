@@ -1,7 +1,7 @@
 name: Ring Catcher Regression Tests
 on:
   push:
-    branches: [main]
+    branches: [main, 'physics/**']
     paths:
       - 'Portrait Breakout.html'
       - 'tests/ring-catcher.test.cjs'

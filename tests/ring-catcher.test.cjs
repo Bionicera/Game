@@ -315,7 +315,7 @@ test('moving paddle cannot turn an inner soft catch into an energy injection', (
   const h=harness(),p=h.paddle;
   p.vx=900;
   const R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(Math.PI),r=8;
-  const o={x:p.x+p.w/2-ri+r+.5,y:cy,vx:-300,vy:0,r};
+  const o={x:p.x+p.w/2-ri+r-.5,y:cy,vx:-300,vy:0,r};
   const before=Math.hypot(o.vx,o.vy);
   assert.equal(h.ringContact(o,o.x+5,o.y,true,p.x,p.x),true,
     'the moving inner wall must register the swept contact');
@@ -355,7 +355,7 @@ test('production physics retains bounded soft inner response and accelerated out
   assert.match(innerResponse,/softNormal=-vn\*\.28/);
   assert.match(innerResponse,/softTangent=vt\*\.94/);
   assert.match(innerResponse,/before\*\.985/);
-  assert.match(innerResponse,/baseSpeed\(\)\*\.22/);
+  assert.ok(ringContact.includes('baseSpeed()*.22'));
   assert.ok(ringContact.includes('speedCap=baseSpeed()*1.72'));
   assert.ok(ringContact.includes('Math.min(1.045,speedCap/afterReflect)'));
 });

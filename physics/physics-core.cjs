@@ -86,6 +86,37 @@ function createContact({bodyA,bodyB,point,normal,penetration=0,toi=null,surfaceV
   };
 }
 
+function createCollider(body,shape,geometry={},material={}) {
+  if (!body || !Number.isFinite(body.invMass) || body.invMass<0 ||
+      !(body.mass>0 || body.mass===Infinity) || !isFiniteVector(body.position)) {
+    throw new TypeError('collider requires a valid body');
+  }
+  if (!['circle','plane','aabb','segment'].includes(shape)) throw new TypeError('unsupported collider shape');
+  const g={...geometry};
+  if (shape==='circle') {
+    if (!(g.radius>0) || !Number.isFinite(g.radius)) throw new RangeError('circle radius must be finite and positive');
+  } else if (shape==='plane') {
+    const length=isFiniteVector(g.normal)?Math.hypot(g.normal.x,g.normal.y):NaN;
+    if (!Number.isFinite(length) || length<EPSILON || !Number.isFinite(g.offset)) throw new TypeError('plane requires a finite normal and offset');
+    g.normal=scale(g.normal,1/length);
+    g.offset/=length;
+  } else if (shape==='aabb') {
+    if (![g.x,g.y,g.halfWidth,g.halfHeight].every(Number.isFinite) || !(g.halfWidth>0) || !(g.halfHeight>0)) {
+      throw new TypeError('aabb requires finite center and positive half extents');
+    }
+  } else if (shape==='segment') {
+    if (!isFiniteVector(g.a) || !isFiniteVector(g.b) ||
+        Math.hypot(g.b.x-g.a.x,g.b.y-g.a.y)<EPSILON) {
+      throw new TypeError('segment requires distinct finite endpoints');
+    }
+    g.a={...g.a}; g.b={...g.b};
+  }
+  const restitution=material.restitution ?? 1, friction=material.friction ?? 0;
+  if (!Number.isFinite(restitution) || restitution<0 || restitution>1 ||
+      !Number.isFinite(friction) || friction<0) throw new RangeError('invalid collider material');
+  return {body,shape,geometry:g,material:{restitution,friction}};
+}
+
 function createContactTelemetry(bodyA,bodyB,contact,result,energyBefore) {
   if (!result || !result.valid) return {valid:false,reason:result?.reason || 'invalid-solver-result'};
   const energyAfter = kineticEnergy(bodyA)+kineticEnergy(bodyB);
@@ -294,4 +325,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

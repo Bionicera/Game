@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -154,6 +154,57 @@ test('Collider factory snapshots geometry and material input values', () => {
   geometry.a.x=99; material.friction=99;
   assert.deepEqual(c.geometry.a,{x:0,y:0});
   assert.equal(c.material.friction,.2);
+});
+
+
+test('narrow phase emits circle-plane contact with B-to-A normal and penetration', () => {
+  const ball=body(1), wall=body(Infinity);
+  ball.position={x:0,y:.5};
+  const contacts=detectContacts([createCollider(ball,'circle',{radius:1}),createCollider(wall,'plane',{normal:{x:0,y:1},offset:0})]);
+  assert.equal(contacts.valid,true);
+  assert.equal(contacts.contacts.length,1);
+  assert.deepEqual(contacts.contacts[0].normal,{x:0,y:1});
+  assert.deepEqual(contacts.contacts[0].point,{x:0,y:0});
+  assert.ok(Math.abs(contacts.contacts[0].penetration-.5)<EPS);
+});
+test('narrow phase handles circle-AABB exterior and interior contacts', () => {
+  const ball=body(1), box=body(Infinity);
+  const aabb=createCollider(box,'aabb',{x:0,y:0,halfWidth:1,halfHeight:1});
+  ball.position={x:1.4,y:0};
+  let result=detectContacts([createCollider(ball,'circle',{radius:.5}),aabb]);
+  assert.equal(result.contacts.length,1);
+  assert.ok(Math.abs(result.contacts[0].penetration-.1)<EPS);
+  ball.position={x:0,y:0};
+  result=detectContacts([createCollider(ball,'circle',{radius:.5}),aabb]);
+  assert.equal(result.contacts.length,1);
+  assert.deepEqual(result.contacts[0].normal,{x:-1,y:0});
+  assert.ok(Math.abs(result.contacts[0].penetration-1.5)<EPS);
+});
+test('narrow phase uses closest point on segment and rejects separated pairs', () => {
+  const ball=body(1), wall=body(Infinity);
+  ball.position={x:2,y:.25};
+  const segment=createCollider(wall,'segment',{a:{x:0,y:0},b:{x:4,y:0}});
+  let result=detectContacts([createCollider(ball,'circle',{radius:.5}),segment]);
+  assert.equal(result.contacts.length,1);
+  assert.deepEqual(result.contacts[0].point,{x:2,y:0});
+  assert.deepEqual(result.contacts[0].normal,{x:0,y:1});
+  ball.position.y=1;
+  result=detectContacts([createCollider(ball,'circle',{radius:.5}),segment]);
+  assert.equal(result.contacts.length,0);
+});
+test('narrow phase circle-circle coincident centers use deterministic normal', () => {
+  const a=body(1), b=body(2);
+  const result=detectContacts([createCollider(a,'circle',{radius:1}),createCollider(b,'circle',{radius:2})]);
+  assert.equal(result.contacts.length,1);
+  assert.deepEqual(result.contacts[0].normal,{x:1,y:0});
+  assert.equal(result.contacts[0].penetration,3);
+});
+test('narrow phase returns no contacts for static-static and same-body pairs', () => {
+  const wall=body(Infinity), ball=body(1);
+  const circle=createCollider(ball,'circle',{radius:1});
+  const plane=createCollider(wall,'plane',{normal:{x:0,y:1},offset:0});
+  assert.equal(detectContacts([plane,createCollider(body(Infinity),'plane',{normal:{x:0,y:-1},offset:0})]).contacts.length,0);
+  assert.equal(detectContacts([circle,createCollider(ball,'circle',{radius:1})]).contacts.length,0);
 });
 
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {

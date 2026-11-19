@@ -138,3 +138,12 @@ test('invalid dt or non-finite accumulated force fails without corrupting body',
   assert.equal(integrateBody(b,.1).valid,false);
   assert.deepEqual(b.position,{x:3,y:4});
 });
+
+test('overflowing force and impulse requests are rejected atomically', () => {
+  const b=body(1,{x:Number.MAX_VALUE,y:0});
+  assert.equal(applyImpulse(b,{x:Number.MAX_VALUE,y:0}),false);
+  assert.deepEqual(b.velocity,{x:Number.MAX_VALUE,y:0});
+  assert.equal(applyForce(b,{x:Number.MAX_VALUE,y:0}),true);
+  assert.equal(applyForce(b,{x:Number.MAX_VALUE,y:0}),false);
+  assert.deepEqual(b.force,{x:Number.MAX_VALUE,y:0});
+});

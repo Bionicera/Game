@@ -333,6 +333,15 @@ test('moving paddle cannot turn an inner soft catch into an energy injection', (
   assert.ok(after>=300*.22-1e-6,'inner wall must retain its anti-stall speed floor');
 });
 
+test('fast paddle motion alone cannot create a false inner-wall approach', () => {
+  const h=harness(),p=h.paddle;
+  p.vx=900;
+  const R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(Math.PI),r=8;
+  const o={x:p.x+p.w/2-ri+r-.5,y:cy,vx:200,vy:0,r};
+  assert.equal(h.ringContact(o,o.x-200/60,o.y,true,p.x,p.x),false,
+    'with bounded soft-wall velocity the ball is already moving away from the contact surface');
+});
+
 test('inner soft response applies its speed floor even when the relative collision would stop the ball', () => {
   const h=harness();
   const out=h.ringInnerSoftBounce(0,0,1,0,0,66,0);

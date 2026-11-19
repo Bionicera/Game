@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringInnerSoftBounce', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringInnerSoftBounce', 'ringAutoPaddleVelocity', 'paddleCommandVelocity', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -65,6 +65,7 @@ function harness() {
     const RING_WALL=()=>Math.max(5,Math.min(paddle.h*.72,RING_R()*.22));
     const RING_GAP_HALF=()=>Math.asin(clamp(Math.max(1,ball.r*3)/RING_R(),0,.92));
     const ringAimOffset=rel=>clamp(rel,-.92,.92)*RING_R();
+    const PADDLE_GAIN=10;
     let levelNumber=1;
     const levelType=()=>levelNumber;
     function reflectScreenX(x,r){
@@ -76,7 +77,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringInnerSoftBounce,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringInnerSoftBounce,ringAutoPaddleVelocity,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -309,6 +310,17 @@ test('inner wall remains a reliable speed-reducing catch through ×80 across obl
     maxReliableRatio=ratio;
   }
   assert.equal(maxReliableRatio,80,'stress-tested reliable range must reach at least ×80');
+});
+
+test('ring Auto paddle speed is reduced further during sling oscillation', () => {
+  const h=harness();
+  h.sling.phase='idle';
+  const normal=h.ringAutoPaddleVelocity(1000,0);
+  h.sling.phase='oscillate';
+  const sling=h.ringAutoPaddleVelocity(1000,0);
+  assert.ok(normal<=300*.78+1e-9);
+  assert.ok(sling<=300*.62+1e-9);
+  assert.ok(sling<normal,'oscillation steering must use a gentler paddle speed cap');
 });
 
 test('soft inner-wall response limits how much paddle velocity can be transferred', () => {

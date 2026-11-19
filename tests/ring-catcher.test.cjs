@@ -551,7 +551,7 @@ test('ringAimReflect applies a hard speed ceiling to attack-mode predictions', (
   assert.ok(Math.hypot(out.vx,out.vy)<=300*1.72+1e-6);
 });
 
-test('RingPlanner keeps a higher-priority unload combo when the instantaneous skill shifts to guide', () => {
+test('RingPlanner keeps a higher-priority unload combo when the instantaneous skill shifts to boost', () => {
   const h=harness(),focus={x:400,y:300,vx:0,vy:0,r:8};
   h.auto=true;
   h.updateRingSensor(0,focus);

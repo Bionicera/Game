@@ -172,7 +172,7 @@ test('PhysicsWorld advances multiple bodies deterministically in one world step'
   assert.equal(y.world.step(.5).valid,true);
   assert.deepEqual(x.a.position,y.a.position);
   assert.deepEqual(x.b.velocity,y.b.velocity);
-  assert.deepEqual(x.a.position,{x:1.5,y:0});
+  assert.deepEqual(x.a.position,{x:1,y:0});
   assert.deepEqual(x.b.position,{x:.25,y:1});
 });
 

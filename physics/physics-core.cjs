@@ -403,10 +403,11 @@ class PhysicsWorld {
     return true;
   }
 
-  step(dt,{positionCorrection=.8,positionSlop=.01}={}) {
+  step(dt,{positionCorrection=.8,positionSlop=.01,solverIterations=1}={}) {
     if (!(dt>0) || !Number.isFinite(dt) ||
         !Number.isFinite(positionCorrection) || positionCorrection<0 || positionCorrection>1 ||
-        !Number.isFinite(positionSlop) || positionSlop<0) {
+        !Number.isFinite(positionSlop) || positionSlop<0 ||
+        !Number.isInteger(solverIterations) || solverIterations<1 || solverIterations>32) {
       return {valid:false,reason:'invalid-world-step-options'};
     }
     const snapshots=this.bodies.map(body=>({
@@ -444,8 +445,18 @@ class PhysicsWorld {
     const detected=detectContacts(this.colliders);
     if (!detected.valid) { rollback(); return detected; }
     for (const contact of detected.contacts) {
-      const solved=solveContact(contact.bodyA,contact.bodyB,contact.normal,contact.material);
-      if (!solved.valid) { rollback(); return {valid:false,reason:'contact-solver-failed',featureId:contact.featureId}; }
+      contact.normalImpulse=0;
+      contact.tangentImpulse=0;
+    }
+    for (let iteration=0;iteration<solverIterations;iteration++) {
+      for (const contact of detected.contacts) {
+        const solved=solveContact(contact.bodyA,contact.bodyB,contact.normal,contact.material);
+        if (!solved.valid) { rollback(); return {valid:false,reason:'contact-solver-failed',featureId:contact.featureId}; }
+        contact.normalImpulse+=solved.normalImpulse||0;
+        contact.tangentImpulse+=solved.tangentImpulse||0;
+      }
+    }
+    for (const contact of detected.contacts) {
       const inverseMassSum=contact.bodyA.invMass+contact.bodyB.invMass;
       const correction=Math.max(contact.penetration-positionSlop,0)*positionCorrection/inverseMassSum;
       if (!Number.isFinite(correction)) { rollback(); return {valid:false,reason:'invalid-position-correction'}; }
@@ -457,8 +468,6 @@ class PhysicsWorld {
           return {valid:false,reason:'non-finite-position-correction'};
         }
       }
-      contact.normalImpulse=solved.normalImpulse||0;
-      contact.tangentImpulse=solved.tangentImpulse||0;
     }
     this.stepCount++;
     return {

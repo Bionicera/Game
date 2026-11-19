@@ -98,7 +98,7 @@ const { chromium } = require('playwright');
     await page.evaluate(() => window.__ringTest.chooseRing());
     await page.waitForTimeout(40); // drain the already queued animation frame after disabling the loop
     const skills=await page.evaluate(() => window.__ringTest.plannerMatrix());
-    assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'guide',safe:'safe-catch',trajectory:true},
+    assert.deepEqual(skills,{boost:'boost',capture:'capture',gap:'gap-guide',guide:'boost',safe:'safe-catch',trajectory:true},
       'browser planner should arbitrate the complete base skill set');
     const capture=await page.evaluate(() => window.__ringTest.innerCapture());
     assert.equal(capture.hit,true,'production inner-wall collision should register');

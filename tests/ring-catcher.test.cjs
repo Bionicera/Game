@@ -245,6 +245,24 @@ test('outer aiming normals preserve the complete circular wall physics', () => {
   assert.ok(bottom.y>.999&&Math.abs(bottom.x)<1e-9,'lower arc normal points downward');
 });
 
+test('inner wall remains a reliable speed-reducing catch through ×80 across oblique approaches', () => {
+  const angles=[0,-.35,.35,-.55,.55];
+  let maxReliableRatio=0;
+  for(let ratio=1;ratio<=80;ratio++){
+    for(const angle of angles){
+      const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(0);
+      const speed=300*ratio,vx=speed*Math.cos(angle),vy=speed*Math.sin(angle);
+      const o={x:p.x+p.w/2+ri-8+.5,y:cy,vx,vy,r:8};
+      const before=Math.hypot(vx,vy),prevX=o.x-vx/60,prevY=o.y-vy/60;
+      assert.equal(h.ringContact(o,prevX,prevY,true,p.x,p.x),true,'inner contact should register at ×'+ratio+' angle '+angle);
+      const after=Math.hypot(o.vx,o.vy);
+      assert.ok(Number.isFinite(after)&&after<before*.95,'inner wall must dissipate at least 5% at ×'+ratio+' angle '+angle);
+    }
+    maxReliableRatio=ratio;
+  }
+  assert.equal(maxReliableRatio,80,'stress-tested reliable range must reach at least ×80');
+});
+
 test('outer wall reflects and applies the bounded 1.045 speed gain', () => {
   const h = harness(), p=h.paddle, R=p.w*.47, cy=p.y+p.h-R;
   const o={x:p.x+p.w/2+R+8-.5,y:cy,vx:-300,vy:50,r:8};

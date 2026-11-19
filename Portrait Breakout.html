@@ -1036,13 +1036,9 @@
         predicted=reflectScreenX(focus.x+focus.vx*sensor.etaInner,focus.r);
       return {skill:'capture',comboName:'unload',targetX:safeTarget(predicted),reason:'高速或持续加速，优先内壁卸力',confidence:.88};
     }
-    if(sensor.radialZone==='inside'||sensor.radialZone==='wall-band'){
-      const steer=sensor.gapPassable&&sensor.gapPredictedX!==null?sensor.gapPredictedX:focus.x;
-      return {skill:'guide',comboName:'control',targetX:safeTarget(steer),reason:'球处于环内，微调圆环中心控制球路',confidence:.76};
-    }
     if(!ringUsesInnerWall(sensor.speedRatio)){
       return {skill:'boost',comboName:'charge',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),
-        reason:'低于内壁接球阈值：准备外壁硬壁增能',confidence:.82};
+        reason:'低于内壁接球阈值：优先外壁硬壁增能',confidence:.86};
     }
     return {skill:decision&&decision.intent==='aim'?'attack':'guide',
       comboName:decision&&decision.intent==='aim'?'attack':'control',targetX:safeTarget(aimPlan&&Number.isFinite(aimPlan.tx)?aimPlan.tx:focus.x),

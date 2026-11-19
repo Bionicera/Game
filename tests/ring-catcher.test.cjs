@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -76,7 +76,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -230,6 +230,54 @@ test('inner wall soft contact dissipates speed while retaining a valid response'
   assert.ok(Number.isFinite(o.x)&&Number.isFinite(o.y)&&Number.isFinite(o.vx)&&Number.isFinite(o.vy));
 });
 
+
+test('inner angle projection returns the exact wavy-wall contact point and inward normal', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,gap=Math.asin(24/R),angles=[
+    -Math.PI/2+gap+.08,-.7,0,.8,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.08
+  ];
+  for(const angle of angles){
+    const point=h.ringInnerAimPoint(angle,8);
+    assert.ok(point,'solid inner-wall angle should project');
+    const dx=point.center.x-point.q.x,dy=point.center.y-point.q.y;
+    assert.ok(Math.abs(Math.hypot(dx,dy)-8)<1e-9,'ball center must be offset by exactly its radius');
+    assert.ok(Math.abs(dx*point.normal.x+dy*point.normal.y-8)<1e-8,'offset follows the true curve normal');
+    const tangentDot=point.normal.x*(h.ringInnerRadiusSlope(angle)*Math.cos(angle)-h.ringInnerRadius(angle)*Math.sin(angle))
+      +point.normal.y*(h.ringInnerRadiusSlope(angle)*Math.sin(angle)+h.ringInnerRadius(angle)*Math.cos(angle));
+    assert.ok(Math.abs(tangentDot)<1e-8,'normal must be perpendicular to the actual wavy-wall tangent');
+  }
+  assert.equal(h.ringInnerAimPoint(-Math.PI/2,8),null,'the opening itself is not a wall');
+});
+test('inner angle projections match real swept collisions at upper, side and lower wall angles', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R);
+  for(const angle of [-Math.PI/2+gap+.12,-.35,0,.7,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.12]){
+    const point=h.ringInnerAimPoint(angle,8);
+    const o={x:p.x+p.w/2+point.center.x,y:cy+point.center.y,
+      vx:-point.normal.x*260,vy:-point.normal.y*260,r:8};
+    const hit=h.ringContact(o,o.x+point.normal.x*5,o.y+point.normal.y*5,true,p.x,p.x);
+    assert.equal(hit,true,'projected inner contact must match ringContact at angle '+angle);
+  }
+});
+test('outer collision-point projections match the exact circular wall and reject the gap', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,gap=Math.asin(24/R);
+  const angles=[-Math.PI/2+gap+.08,0,Math.PI/2,Math.PI,Math.PI*1.5,3*Math.PI/2-gap-.08];
+  for(const angle of angles){
+    const point=h.ringOuterAimPoint(angle,8);
+    assert.ok(point);
+    assert.ok(Math.abs(Math.hypot(point.center.x,point.center.y)-(R+8))<1e-9);
+    const o={x:p.x+p.w/2+point.center.x,y:cy+point.center.y,
+      vx:-point.normal.x*260,vy:-point.normal.y*260,r:8};
+    assert.equal(h.ringContact(o,o.x+point.normal.x*5,o.y+point.normal.y*5,true,p.x,p.x),true,
+      'projected outer contact must match ringContact at angle '+angle);
+  }
+  assert.equal(h.ringOuterAimPoint(-Math.PI/2,8),null,'the opening itself is not an outer wall point');
+});
+test('planAim evaluates inner capture candidates by projected wall angle, not a guessed top contact height', () => {
+  const source=extractFunction('planAim');
+  assert.match(source,/ringInnerAimAngles\(144\)/);
+  assert.match(source,/ringInnerAimPoint\(angle,r\)/);
+  assert.match(source,/projected\.center\.y/);
+  assert.match(source,/normalOverride=projected\.normal/);
+});
 
 test('outer aim candidates sample upper, middle and lower arcs while omitting the gap', () => {
   const h=harness(),angles=h.ringOuterAimAngles(96),gap=Math.asin(24/94);

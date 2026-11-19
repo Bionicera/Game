@@ -1,3 +1,6 @@
+'use strict';
+const test = require('node:test');
+const assert = require('node:assert/strict');
 const EPS = 1e-10;
 const {createBody,kineticEnergy,linearMomentum,solveContact} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});

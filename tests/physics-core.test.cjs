@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {sweepCirclePlane,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {sweepCirclePlane,sweepCircleSegment,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -534,4 +534,49 @@ test('PhysicsWorld rolls back the whole step when CCD exceeds its event safety l
   assert.deepEqual(ball.velocity,before.velocity);
   assert.deepEqual(ball.force,before.force);
   assert.equal(world.stepCount,0);
+});
+
+
+test('sweepCircleSegment detects side-face TOI and rejects paths outside the finite span', () => {
+  const hit=sweepCircleSegment({position:{x:2,y:10},velocity:{x:0,y:-200},radius:1,a:{x:0,y:0},b:{x:4,y:0},dt:.1});
+  assert.equal(hit.valid,true);
+  assert.ok(Math.abs(hit.hit.seconds-.045)<EPS);
+  assert.deepEqual(hit.hit.normal,{x:0,y:1});
+  assert.deepEqual(hit.hit.point,{x:2,y:0});
+  const miss=sweepCircleSegment({position:{x:8,y:10},velocity:{x:0,y:-200},radius:1,a:{x:0,y:0},b:{x:4,y:0},dt:.1});
+  assert.equal(miss.hit,null);
+});
+test('sweepCircleSegment detects rounded endpoint impacts with radial normals', () => {
+  const hit=sweepCircleSegment({position:{x:-.5,y:5},velocity:{x:0,y:-100},radius:1,a:{x:0,y:0},b:{x:4,y:0},dt:.1});
+  assert.equal(hit.valid,true);
+  assert.ok(hit.hit.seconds>0 && hit.hit.seconds<.05);
+  assert.equal(hit.hit.featureId,'circle-segment-end-a');
+  assert.ok(Math.abs(Math.hypot(hit.hit.normal.x,hit.hit.normal.y)-1)<EPS);
+  assert.ok(Math.abs(Math.hypot(hit.hit.center.x,hit.hit.center.y)-1)<EPS);
+});
+test('PhysicsWorld CCD prevents fast circle tunneling through a finite static segment', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), wall=body(Infinity);
+  ball.position={x:2,y:10};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(wall,'segment',{a:{x:0,y:0},b:{x:4,y:0}},{restitution:1}));
+  const result=world.step(.05);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(ball.position.y>=1-EPS);
+  assert.ok(ball.velocity.y>0);
+  assert.ok(Math.abs(ball.position.y-2)<1e-7);
+});
+test('PhysicsWorld CCD resolves a segment endpoint as a rounded cap', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-100}), wall=body(Infinity);
+  ball.position={x:-.5,y:5};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(wall,'segment',{a:{x:0,y:0},b:{x:4,y:0}},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.equal(result.contacts[0].featureId,'circle-segment-end-a');
+  assert.ok(ball.velocity.x<0);
+  assert.ok(ball.position.x<-.5);
 });

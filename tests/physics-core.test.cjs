@@ -89,11 +89,11 @@ test('two dynamic bodies conserve total momentum and obey restitution', () => {
   assert.ok(Math.abs(b.v.x-(13/3))<EPS);
 });
 test('separating contact receives no second impulse', () => {
-  const a=body(1,{x:2,y:0}), wall=body(Infinity,{x:0,y:0});
+  const a=body(1,{x:-2,y:0}), wall=body(Infinity,{x:0,y:0});
   const r=resolve(a,wall,{x:-1,y:0});
   assert.equal(r.applied,false);
   assert.equal(r.jn,0);
-  assert.equal(a.v.x,2);
+  assert.equal(a.v.x,-2);
 });
 test('friction impulse is bounded by Coulomb limit', () => {
   const a=body(1,{x:4,y:20}), wall=body(Infinity,{x:0,y:0});

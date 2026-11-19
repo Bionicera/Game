@@ -208,8 +208,7 @@ function detectContacts(colliders) {
 }
 
 /**
- * Deterministic body registry and force/integration owner.
- * This prototype deliberately has no collision detection or contact pipeline.
+ * Deterministic body registry, force/integration owner and contact pipeline.
  */
 class PhysicsWorld {
   constructor() {
@@ -244,6 +243,7 @@ class PhysicsWorld {
   }
   removeBody(body) {
     if (!this.bodySet.has(body)) return false;
+    for (const collider of this.colliders.filter(item => item.body === body)) this.removeCollider(collider);
     this.bodySet.delete(body);
     this.bodies.splice(this.bodies.indexOf(body),1);
     return true;

@@ -770,7 +770,7 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 ### 2026-11-19 · P2 Contact 数据契约
 - 在主线 `physics/physics-core.cjs` 新增 `createContact`：统一验证 bodyA/bodyB 身份、point/normal/surfaceVelocity 有限性、B→A 法线归一化、非负 penetration、TOI 区间、featureId 与 restitution/friction 材质边界。
 - `tests/physics-core.test.cjs` 新增 4 项契约测试，覆盖合法字段/法线归一化、退化法线与非法向量、穿透/TOI 越界、重复 Body 与非法材质。
-- 主线 `physics-core` CI Job 29/29 通过，Actions run [44447477875](https://github.com/Bionicera/Game/actions/runs/44447477875)。该结论仅代表物理内核单测 Job；同一工作流中的浏览器 Smoke、第一关 benchmark 仍需分别核对最终状态。
+- 主线 `physics-core` CI Job 29/29 通过；`ring-catcher` 与 `browser-smoke` Job 均成功。Actions run [44447477875](https://github.com/Bionicera/Game/actions/runs/44447477875)。`first-level-benchmark` Job 的执行本身成功，但真实玩法结果为 0/6 胜（winRate=0），所以第一关仍未通过验收；不能把 Job 绿灯当成通关。
 - 本轮只改独立物理原型、测试与文档；未修改 `Portrait Breakout.html`，未接入生产循环，不发布、不部署。
 - 下一步：实现 Collider 描述与静态几何窄相位，之后建立确定性 Contact 集合；暂不做生产迁移。
 

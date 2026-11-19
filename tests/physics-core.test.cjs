@@ -732,3 +732,19 @@ test('swept broad phase covers both moving circles and rejects invalid sweep dt'
   assert.deepEqual(buildBroadPhasePairs(colliders,{sweepDt:.1}).pairs,[[0,1]]);
   assert.equal(buildBroadPhasePairs(colliders,{sweepDt:-1}).valid,false);
 });
+
+
+test('PhysicsWorld CCD resolves simultaneous orthogonal plane impacts at one TOI', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:-200,y:-200}), vertical=body(Infinity), horizontal=body(Infinity);
+  ball.position={x:10,y:10};
+  world.addBody(ball); world.addBody(vertical); world.addBody(horizontal);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(vertical,'plane',{normal:{x:1,y:0},offset:0},{restitution:1}));
+  world.addCollider(createCollider(horizontal,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,2);
+  assert.ok(ball.velocity.x>0 && ball.velocity.y>0);
+  assert.ok(Math.abs(ball.position.x-12)<1e-7);
+  assert.ok(Math.abs(ball.position.y-12)<1e-7);
+});

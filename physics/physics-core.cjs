@@ -19,7 +19,60 @@ function createBody(mass, velocity={x:0,y:0}, surfaceVelocity={x:0,y:0}) {
     mass,
     invMass: mass === Infinity ? 0 : 1/mass,
     velocity: {...velocity},
-    surfaceVelocity: {...surfaceVelocity}
+    surfaceVelocity: {...surfaceVelocity},
+    force: {x:0,y:0},
+    position: {x:0,y:0}
+  };
+}
+
+function applyForce(body, force) {
+  if (!body || body.invMass === 0 || !isFiniteVector(force)) return false;
+  body.force = add(body.force,force);
+  return isFiniteVector(body.force);
+}
+
+function applyImpulse(body, impulse) {
+  if (!body || body.invMass === 0 || !isFiniteVector(impulse)) return false;
+  body.velocity = add(body.velocity,scale(impulse,body.invMass));
+  return isFiniteVector(body.velocity);
+}
+
+// Semi-implicit Euler: update velocity from accumulated force, then position.
+// Forces are cleared after each successful step.
+function integrateBody(body, dt) {
+  if (!body || body.invMass === 0 || !(dt >= 0) || !Number.isFinite(dt) ||
+      !isFiniteVector(body.position) || !isFiniteVector(body.velocity) || !isFiniteVector(body.force)) {
+    return {valid:false,reason:'invalid-integration-input'};
+  }
+  const acceleration = scale(body.force,body.invMass);
+  const nextVelocity = add(body.velocity,scale(acceleration,dt));
+  const nextPosition = add(body.position,scale(nextVelocity,dt));
+  if (!isFiniteVector(nextVelocity) || !isFiniteVector(nextPosition)) {
+    return {valid:false,reason:'non-finite-integration-result'};
+  }
+  body.velocity = nextVelocity;
+  body.position = nextPosition;
+  body.force = {x:0,y:0};
+  return {valid:true,acceleration};
+}
+
+function createContactTelemetry(bodyA,bodyB,contact,result,energyBefore) {
+  if (!result || !result.valid) return {valid:false,reason:result?.reason || 'invalid-solver-result'};
+  const energyAfter = kineticEnergy(bodyA)+kineticEnergy(bodyB);
+  const momentumAfter = add(linearMomentum(bodyA),linearMomentum(bodyB));
+  return {
+    valid:true,
+    bodyA:bodyA.id ?? null, bodyB:bodyB.id ?? null,
+    point:contact?.point ? {...contact.point} : null,
+    normal:result.normal ? {...result.normal} : null,
+    relativeVelocity:result.relativeVelocity ? {...result.relativeVelocity} : null,
+    normalImpulse:result.normalImpulse ?? 0,
+    tangentImpulse:result.tangentImpulse ?? 0,
+    kineticEnergyBefore:energyBefore,
+    kineticEnergyAfter:energyAfter,
+    kineticEnergyDelta:energyAfter-energyBefore,
+    kinematicWork:result.kinematicWork ?? 0,
+    momentumAfter
   };
 }
 
@@ -78,4 +131,4 @@ function solveContact(bodyA, bodyB, normal, material={}) {
   };
 }
 
-module.exports = {createBody,kineticEnergy,linearMomentum,solveContact};
+module.exports = {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact};

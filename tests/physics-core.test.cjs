@@ -221,6 +221,57 @@ test('narrow phase returns no contacts for static-static and same-body pairs', (
   assert.equal(detectContacts([circle,createCollider(ball,'circle',{radius:1})]).contacts.length,0);
 });
 
+
+test('PhysicsWorld registers colliders only for owned bodies and cleans them on removal', () => {
+  const world=new PhysicsWorld(), ball=body(1), wall=body(Infinity);
+  const collider=createCollider(ball,'circle',{radius:1});
+  assert.equal(world.addCollider(collider).reason,'invalid-collider');
+  world.addBody(ball); world.addBody(wall);
+  assert.equal(world.addCollider(collider).valid,true);
+  assert.equal(world.addCollider(collider).reason,'collider-already-registered');
+  assert.equal(world.removeBody(ball),true);
+  assert.equal(world.colliders.length,0);
+  assert.equal(world.removeCollider(collider),false);
+});
+test('PhysicsWorld integrates, resolves and position-corrects circle-plane contact', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-2}), wall=body(Infinity);
+  ball.position={x:0,y:.5};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(wall,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.contactCount,1);
+  assert.ok(ball.velocity.y>0);
+  assert.ok(Math.abs(ball.position.y-.852)<EPS);
+});
+test('PhysicsWorld uses kinematic contact surface velocity in collision impulse', () => {
+  const world=new PhysicsWorld(), ball=body(1), paddle=body(Infinity,{x:0,y:0},{x:0,y:3});
+  ball.position={x:0,y:.5};
+  world.addBody(ball); world.addBody(paddle);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(paddle,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
+  const result=world.step(.01);
+  assert.equal(result.valid,true);
+  assert.ok(ball.velocity.y>0);
+  assert.ok(Math.abs(ball.velocity.y-6)<EPS);
+});
+test('PhysicsWorld rolls back integrated state when narrow phase rejects invalid geometry', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:1,y:0}), wall=body(Infinity);
+  ball.position={x:0,y:.5};
+  world.addBody(ball); world.addBody(wall);
+  world.addCollider(createCollider(ball,'circle',{radius:1}));
+  const plane=createCollider(wall,'plane',{normal:{x:0,y:1},offset:0});
+  plane.geometry.normal={x:0,y:0};
+  world.addCollider(plane);
+  const before={position:{...ball.position},velocity:{...ball.velocity},stepCount:world.stepCount};
+  const result=world.step(.1);
+  assert.equal(result.valid,false);
+  assert.deepEqual(ball.position,before.position);
+  assert.deepEqual(ball.velocity,before.velocity);
+  assert.equal(world.stepCount,before.stepCount);
+});
+
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {
   const b=body(2,{x:1,y:0}); b.position={x:0,y:0};
   assert.equal(applyForce(b,{x:4,y:0}),true);

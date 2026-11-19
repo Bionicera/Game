@@ -644,7 +644,8 @@ class PhysicsWorld {
       if (!isFiniteVector(body.position) || !isFiniteVector(body.velocity) || !isFiniteVector(body.force)) {
         rollback(); return {valid:false,reason:'invalid-integration-input'};
       }
-      const nextVelocity=add(body.velocity,scale(body.force,body.invMass*dt));
+      const acceleration=scale(body.force,body.invMass);
+      const nextVelocity=add(body.velocity,scale(acceleration,dt));
       if (!isFiniteVector(nextVelocity)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
       body.velocity=nextVelocity;
       body.force={x:0,y:0};

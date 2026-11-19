@@ -541,8 +541,9 @@ function solveContact(bodyA, bodyB, normal, material={}) {
 
 
 /**
- * Deterministic body registry and force/integration owner.
- * This prototype deliberately has no collision detection or contact pipeline.
+ * Deterministic world owner: body/collider registries, force integration,
+ * swept broad phase, narrow phase, TOI stepping, impulse solving and correction.
+ * Production game integration remains intentionally separate.
  */
 class PhysicsWorld {
   constructor() {

@@ -7,6 +7,7 @@ on:
       - 'tests/ring-catcher.test.cjs'
       - 'tests/ring-browser-smoke.cjs'
       - 'tests/ring-first-level-benchmark.cjs'
+      - 'tests/physics-core.test.cjs'
       - '.github/workflows/ring-catcher-tests.yml'
   workflow_dispatch:
 jobs:
@@ -18,6 +19,15 @@ jobs:
         with:
           node-version: 20
       - run: node --test tests/ring-catcher.test.cjs
+
+  physics-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node --test tests/physics-core.test.cjs
 
   browser-smoke:
     runs-on: ubuntu-latest

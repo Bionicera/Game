@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -76,7 +76,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -164,7 +164,7 @@ test('critical speed risk overrides the short strategy hold', () => {
   const h = harness(), focus = {};
   const sensor = {valid:true,speedRatio:.6,speedClass:'slow',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
   h.updateRingState(sensor,0,focus);
-  sensor.speedRatio=1.9;sensor.speedClass='extreme';
+  sensor.speedRatio=5.1;sensor.speedClass='extreme';
   assert.equal(h.updateRingState(sensor,.01,focus).mode,'capture');
 });
 
@@ -231,6 +231,13 @@ test('inner wall soft contact dissipates speed while retaining a valid response'
 });
 
 
+test('outer aim candidates sample upper, middle and lower arcs while omitting the gap', () => {
+  const h=harness(),angles=h.ringOuterAimAngles(96),gap=Math.asin(24/94);
+  assert.ok(angles.some(a=>Math.abs(a)<1e-9),'right-side midpoint must be sampled');
+  assert.ok(angles.some(a=>Math.abs(a-Math.PI/2)<1e-9),'lower arc must be sampled');
+  assert.ok(angles.some(a=>Math.abs(a-Math.PI)<1e-9),'left-side midpoint must be sampled');
+  assert.ok(angles.every(a=>a>=-Math.PI/2+gap-1e-9&&a<=3*Math.PI/2-gap+1e-9),'the open gap is not a wall candidate');
+});
 test('outer aiming normals preserve the complete circular wall physics', () => {
   const h=harness(),top=h.ringOuterAimNormal(-Math.PI/2),middle=h.ringOuterAimNormal(0),bottom=h.ringOuterAimNormal(Math.PI/2);
   assert.ok(top.y<-.999&&Math.abs(top.x)<1e-9,'upper arc normal points upward');
@@ -530,7 +537,7 @@ test('RingPlanner keeps a higher-priority unload combo when the instantaneous sk
   const h=harness(),focus={x:400,y:300,vx:0,vy:0,r:8};
   h.auto=true;
   h.updateRingSensor(0,focus);
-  h.sensor.speedRatio=1.4;h.sensor.speedClass='fast';h.sensor.speedTrend='stable';
+  h.sensor.speedRatio=5.4;h.sensor.speedClass='extreme';h.sensor.speedTrend='stable';
   h.updateRingState(h.sensor,0,focus);
   h.updateRingPlanner(.016,focus);
   assert.equal(h.combo.name,'unload');

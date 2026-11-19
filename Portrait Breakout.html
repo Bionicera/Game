@@ -820,9 +820,8 @@
       if(!inGap&&radialVelocity>0&&prevRad<innerLimit&&radial>=innerLimit){
         etaInner=elapsed;addEvent('inner',elapsed,x,y);
         const nx=-dx/radial,ny=-dy/radial,tx=-ny,ty=nx;
-        const vn=vx*nx+vy*ny,vt=vx*tx+vy*ty;
-        const sn=-vn*.28,st=vt*.94;
-        vx=sn*nx+st*tx;vy=sn*ny+st*ty;
+        const response=ringInnerSoftBounce(vx,vy,nx,ny,0,baseSpeed()*.22,Math.hypot(vx,vy));
+        vx=response.vx;vy=response.vy;
         const safe=Math.max(1,innerLimit-.8);
         x=cx+dx/radial*safe;y=cy+dy/radial*safe;
         break; // 规划只需要首个物理事件；不把撞壁后的绕行误判为直接缺口通行。
@@ -1322,6 +1321,22 @@
   }
 
   // 开口圆环：外壁保持圆形硬壁，内壁使用非对称柔和起伏；顶部缺口始终开放。
+  // 内壁采用挡板参考系软反射，但挡板运动不能把“捕捉/减速”变成无限做功。
+  // 保留切向控制与移动方向，同时限制单次接触后的绝对球速；低于下限时才补足防停滞速度。
+  function ringInnerSoftBounce(vx,vy,nx,ny,paddleVx,speedFloor,speedBefore){
+    const ux=vx-(paddleVx||0),uy=vy,tx=-ny,ty=nx;
+    const vn=ux*nx+uy*ny,vt=ux*tx+uy*ty;
+    const softNormal=-vn*.28,softTangent=vt*.94;
+    let outX=(paddleVx||0)+softNormal*nx+softTangent*tx;
+    let outY=softNormal*ny+softTangent*ty;
+    const floor=Math.max(1,Number.isFinite(speedFloor)?speedFloor:0);
+    const before=Math.max(0,Number.isFinite(speedBefore)?speedBefore:Math.hypot(vx,vy));
+    const ceiling=Math.max(floor,before*.985),raw=Math.hypot(outX,outY),target=clamp(raw,floor,ceiling);
+    if(raw>1e-9){const k=target/raw;outX*=k;outY*=k;}
+    else{const source=Math.hypot(vx,vy)||1;outX=vx/source*target;outY=vy/source*target;}
+    return {vx:outX,vy:outY,speed:target};
+  }
+
   function ringContact(o, prevX, prevY, isMain, paddleStartX, paddleEndX){
     const pw=paddle.w, bottom=paddle.y+paddle.h, R=RING_R();
     const gap=RING_GAP_HALF(), start=-Math.PI/2+gap, end=3*Math.PI/2-gap;
@@ -1380,12 +1395,8 @@
       if(tryReleaseRingSling(o,contact,isMain))return true;
       const speedBeforeContact=Math.hypot(o.vx,o.vy);
       // 内壁是软捕捉/导向面：压低法向反弹，保留大部分切向运动，让球沿不规则内壁滑行并逐步减速。
-      const nx=contact.n.x,ny=contact.n.y,tx=-ny,ty=nx;
-      const rvx=o.vx-paddle.vx,rvy=o.vy;
-      const vn=rvx*nx+rvy*ny,vt=rvx*tx+rvy*ty;
-      const softNormal=-vn*.28,softTangent=vt*.94;
-      o.vx=paddle.vx+softNormal*nx+softTangent*tx;
-      o.vy=softNormal*ny+softTangent*ty;
+      const response=ringInnerSoftBounce(o.vx,o.vy,contact.n.x,contact.n.y,paddle.vx,baseSpeed()*.22,speedBeforeContact);
+      o.vx=response.vx;o.vy=response.vy;
       if(isMain){
         hitFx={x:o.x,y:contact.q.y,ang:Math.atan2(o.vx,-o.vy),t:.24};
         ringMoodEvent(ringMoodRandom()<.62?'😏':'🤓',1.25);

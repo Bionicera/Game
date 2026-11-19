@@ -8,6 +8,7 @@ on:
       - 'tests/ring-browser-smoke.cjs'
       - 'tests/ring-first-level-benchmark.cjs'
       - 'tests/physics-core.test.cjs'
+      - 'physics/physics-core.cjs'
       - '.github/workflows/ring-catcher-tests.yml'
   workflow_dispatch:
 jobs:

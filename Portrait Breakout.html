@@ -568,6 +568,13 @@
   function ringUsesInnerWall(speedRatio){return Number.isFinite(speedRatio)&&speedRatio>=5;}
   // 外环完整圆弧的真实径向法线，不把下半部改造成向上弹射面。
   function ringOuterAimNormal(angle){return {x:Math.cos(angle),y:Math.sin(angle)};}
+  function ringOuterAimAngles(count){
+    const gap=RING_GAP_HALF(),start=-Math.PI/2+gap,end=3*Math.PI/2-gap,n=Math.max(8,count||96);
+    const angles=[];
+    for(let i=0;i<=n;i++)angles.push(start+(end-start)*i/n);
+    for(const a of [0,Math.PI/2,Math.PI,Math.PI*1.5])if(a>=start&&a<=end)angles.push(a);
+    return angles.sort((a,b)=>a-b).filter((a,i,list)=>i===0||Math.abs(a-list[i-1])>1e-8);
+  }
   function ringAimMode(rel,r){
     // 通道按最窄的内环口计算，并扣除球半径与少量数值余量，避免擦边误判为可通过。
     const throat=RING_R()-RING_WALL();
@@ -1636,12 +1643,7 @@
     const firstRel=isRing?-.90:-.78,lastRel=isRing?.901:.781,relStep=isRing?.06:.09;
     for(let rel=firstRel;rel<=lastRel;rel+=relStep)regularRels.push(rel);
     // 高速捕捉仍瞄准缺口；低速外壁攻击遍历真实外圆弧（含中点与下半部）。
-    const gap=RING_GAP_HALF();
-    const outerAngles=[];
-    if(isRing&&preferredRingMode==='attack'){
-      const begin=-Math.PI/2+gap,finish=3*Math.PI/2-gap,count=96;
-      for(let i=0;i<=count;i++)outerAngles.push(begin+(finish-begin)*i/count);
-    }
+    const outerAngles=isRing&&preferredRingMode==='attack'?ringOuterAimAngles(96):[];
     const candidates=isRing&&preferredRingMode==='attack'
       ?outerAngles.map(angle=>({angle,outer:true})):regularRels.map(rel=>({rel,outer:false}));
     for(const candidate of candidates){

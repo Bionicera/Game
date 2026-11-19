@@ -607,28 +607,27 @@
     const clearHalf=Math.max(0,throat*Math.sin(RING_GAP_HALF())-(r||ball.r)-.75);
     return Math.abs(ringAimOffset(rel))<=clearHalf?'capture':'attack';
   }
-  function ringAimContactY(rel,r){
-    const R=RING_R(),cy=paddle.y+paddle.h-R,off=ringAimOffset(rel);
-    if(ringAimMode(rel,r)==='capture'){
-      // 捕捉模型瞄准的是顶部缺口的通行中心线，不是内环底壁的碰撞点。
-      return cy-R-r;
+  // 将同一套双投影几何提供给瞄准、预测和反射：内环按角度投影到不规则曲线，外环按碰撞点投影到圆弧。
+  function ringAimContactProjection(rel,r){
+    const mode=ringAimMode(rel,r),off=ringAimOffset(rel),R=RING_R();
+    if(mode==='capture'){
+      const ri=R-RING_WALL(),angle=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
+      const point=ringInnerAimPoint(angle,r);
+      return point?{...point,mode}:null;
     }
-    return cy-Math.sqrt(Math.max(0,(R+r)*(R+r)-off*off));
+    const angle=-Math.PI/2+Math.asin(clamp(off/(R+r),-.92,.92));
+    const point=ringOuterAimPoint(angle,r);
+    return point?{...point,mode}:null;
+  }
+  function ringAimContactY(rel,r){
+    const point=ringAimContactProjection(rel,r),cy=paddle.y+paddle.h-RING_R();
+    return point?cy+point.center.y:cy-RING_R()-r;
   }
   function ringAimNormal(rel,r){
-    const R=RING_R(),off=ringAimOffset(rel);
-    if(ringAimMode(rel,r)==='capture'){
-      const ri=R-RING_WALL(),a=Math.PI/2-Math.asin(clamp(off/ri,-.92,.92));
-      const rr=ringInnerRadius(a),dr=ringInnerRadiusSlope(a);
-      const tx=dr*Math.cos(a)-rr*Math.sin(a),ty=dr*Math.sin(a)+rr*Math.cos(a);
-      const tl=Math.hypot(tx,ty)||1;
-      let nx=-ty/tl,ny=tx/tl;
-      if(nx*Math.cos(a)+ny*Math.sin(a)>0){nx=-nx;ny=-ny;}
-      return {x:nx,y:ny};
-    }
-    const a=-Math.PI/2+Math.asin(clamp(off/(R+r),-.92,.92));
-    return {x:Math.cos(a),y:Math.sin(a)};
+    const point=ringAimContactProjection(rel,r);
+    return point?point.normal:{x:0,y:-1};
   }
+
   function ringAimReflect(vx,vy,rel,Ux,r,normalOverride,forcedMode){
     const mode=forcedMode||ringAimMode(rel,r),n=normalOverride||ringAimNormal(rel,r),out=paddleReflect(vx,vy,rel,Ux,n);
     const raw=Math.hypot(out.vx,out.vy),cap=baseSpeed()*1.72;
@@ -1568,12 +1567,13 @@
       if(vy>0){
         if(shape==='ring'){
           const offset=x-(paddleX+paddle.w/2),rel=clamp(offset/RING_R(),-.92,.92);
-          const contactY=ringAimContactY(rel,r);
-          if(Math.abs(offset)<=RING_R()+r&&y>=contactY&&y<paddle.y+paddle.h+RING_R()+12){
-            const n=ringAimNormal(rel,r),bounced=ringAimReflect(vx,vy,rel,paddleVx,r);
+          const projection=ringAimContactProjection(rel,r),cy=paddle.y+paddle.h-RING_R();
+          const contactY=projection?cy+projection.center.y:Infinity;
+          if(projection&&Math.abs(offset)<=RING_R()+r&&y>=contactY&&y<paddle.y+paddle.h+RING_R()+12){
+            const bounced=ringAimReflect(vx,vy,rel,paddleVx,r,projection.normal,projection.mode);
             vx=bounced.vx;vy=bounced.vy;
-            x=paddleX+paddle.w/2+ringAimOffset(rel)+n.x*(r+.6);
-            y=contactY+n.y*(r+.6);continue;
+            x=paddleX+paddle.w/2+projection.center.x+projection.normal.x*.6;
+            y=contactY+projection.normal.y*.6;continue;
           }
         }else{
           const rel=clamp((x-(paddleX+paddle.w/2))/(paddle.w/2),-.9,.9);

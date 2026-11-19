@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -622,4 +622,50 @@ test('PhysicsWorld CCD resolves rounded AABB corner impacts', () => {
   assert.equal(result.ccdEventCount,1);
   assert.equal(result.contacts[0].featureId,'circle-aabb-top-left');
   assert.ok(ball.velocity.x<0 && ball.velocity.y<0);
+});
+
+
+test('sweepCircleCircle computes earliest relative-motion TOI', () => {
+  const result=sweepCircleCircle({
+    positionA:{x:-10,y:0},velocityA:{x:200,y:0},radiusA:1,
+    positionB:{x:10,y:0},velocityB:{x:-200,y:0},radiusB:1,dt:.1
+  });
+  assert.equal(result.valid,true);
+  assert.ok(Math.abs(result.hit.seconds-.045)<EPS);
+  assert.deepEqual(result.hit.centerA,{x:-1,y:0});
+  assert.deepEqual(result.hit.centerB,{x:1,y:0});
+  assert.deepEqual(result.hit.normal,{x:-1,y:0});
+  assert.deepEqual(result.hit.point,{x:0,y:0});
+});
+test('sweepCircleCircle ignores separating and non-intersecting trajectories', () => {
+  const base={positionA:{x:-5,y:0},radiusA:1,positionB:{x:5,y:0},velocityB:{x:0,y:0},radiusB:1,dt:.1};
+  assert.equal(sweepCircleCircle({...base,velocityA:{x:-10,y:0}}).hit,null);
+  assert.equal(sweepCircleCircle({...base,velocityA:{x:10,y:10}}).hit,null);
+});
+test('PhysicsWorld CCD resolves fast dynamic circle-circle impacts without tunneling', () => {
+  const world=new PhysicsWorld(), a=body(1,{x:200,y:0}), b=body(1,{x:-200,y:0});
+  a.position={x:-10,y:0}; b.position={x:10,y:0};
+  world.addBody(a); world.addBody(b);
+  world.addCollider(createCollider(a,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(b,'circle',{radius:1},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.equal(result.contacts[0].featureId,'circle-circle');
+  assert.ok(a.velocity.x<0 && b.velocity.x>0);
+  assert.ok(a.position.x< -1 && b.position.x>1);
+  assert.ok(Math.abs(a.position.x+12)<1e-7);
+  assert.ok(Math.abs(b.position.x-12)<1e-7);
+});
+test('PhysicsWorld CCD finds a static circle even when it is registered first', () => {
+  const world=new PhysicsWorld(), fixed=body(Infinity), ball=body(1,{x:200,y:0});
+  ball.position={x:-10,y:0};
+  world.addBody(fixed); world.addBody(ball);
+  world.addCollider(createCollider(fixed,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(ball.velocity.x<0);
+  assert.ok(Math.abs(ball.position.x+14)<1e-7);
 });

@@ -199,6 +199,20 @@ test('narrow phase circle-circle coincident centers use deterministic normal', (
   assert.deepEqual(result.contacts[0].normal,{x:1,y:0});
   assert.equal(result.contacts[0].penetration,3);
 });
+
+test('narrow phase reverses B-to-A normal when collider order is reversed', () => {
+  const ball=body(1), wall=body(Infinity);
+  ball.position={x:0,y:.5};
+  const plane=createCollider(wall,'plane',{normal:{x:0,y:1},offset:0});
+  const circle=createCollider(ball,'circle',{radius:1});
+  const result=detectContacts([plane,circle]);
+  assert.equal(result.contacts.length,1);
+  assert.equal(result.contacts[0].bodyA,wall);
+  assert.equal(result.contacts[0].bodyB,ball);
+  assert.deepEqual(result.contacts[0].normal,{x:0,y:-1});
+  assert.ok(Math.abs(result.contacts[0].penetration-.5)<EPS);
+});
+
 test('narrow phase returns no contacts for static-static and same-body pairs', () => {
   const wall=body(Infinity), ball=body(1);
   const circle=createCollider(ball,'circle',{radius:1});

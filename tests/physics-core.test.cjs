@@ -298,6 +298,30 @@ test('Contact collection produces repeatable order for a fixed collider registra
   assert.deepEqual(first.contacts.map(c=>[c.featureId,c.point.x,c.point.y]),second.contacts.map(c=>[c.featureId,c.point.x,c.point.y]));
 });
 
+
+test('PhysicsWorld resolves simultaneous corner contacts with iterative solver', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:-2,y:-2}), left=body(Infinity), floor=body(Infinity);
+  ball.position={x:.5,y:.5};
+  world.addBody(ball); world.addBody(left); world.addBody(floor);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(left,'plane',{normal:{x:1,y:0},offset:0},{restitution:1}));
+  world.addCollider(createCollider(floor,'plane',{normal:{x:0,y:1},offset:0},{restitution:1}));
+  const result=world.step(.01,{solverIterations:4});
+  assert.equal(result.valid,true);
+  assert.equal(result.contactCount,2);
+  assert.ok(ball.velocity.x>0);
+  assert.ok(ball.velocity.y>0);
+  assert.ok(result.contacts.every(contact=>contact.normalImpulse>0));
+});
+test('PhysicsWorld rejects invalid solver iteration counts without advancing', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:1,y:0});
+  world.addBody(ball);
+  assert.equal(world.step(.1,{solverIterations:0}).valid,false);
+  assert.equal(world.step(.1,{solverIterations:33}).valid,false);
+  assert.deepEqual(ball.position,{x:0,y:0});
+  assert.equal(world.stepCount,0);
+});
+
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {
   const b=body(2,{x:1,y:0}); b.position={x:0,y:0};
   assert.equal(applyForce(b,{x:4,y:0}),true);

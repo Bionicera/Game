@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -76,7 +76,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -135,22 +135,26 @@ test('sensor output remains finite for center and extreme coordinates', () => {
     assert.ok(Number.isFinite(s[key]), key + ' must be finite');
 });
 
-test('ring state maps extreme/high speed to capture and low speed to boost', () => {
-  const h = harness(), focus = {};
-  const sensor = {valid:true,speedRatio:1.8,speedClass:'extreme',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
-  assert.equal(h.updateRingState(sensor,0,focus).mode, 'capture');
-  assert.equal(h.state.intent, 'unload');
-  sensor.speedRatio=.5; sensor.speedClass='slow';
-  assert.equal(h.updateRingState(sensor,.3,focus).mode, 'attack');
-  assert.equal(h.state.intent, 'boost');
+test('ring wall strategy uses the measured ×5 boundary inclusively', () => {
+  const h=harness(),focus={},sensor={valid:true,speedRatio:4.99,speedClass:'extreme',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
+  assert.equal(h.ringUsesInnerWall(4.99),false);
+  assert.equal(h.updateRingState(sensor,0,focus).mode,'attack');
+  assert.equal(h.state.intent,'boost');
+  sensor.speedRatio=5;
+  assert.equal(h.ringUsesInnerWall(5),true);
+  assert.equal(h.updateRingState(sensor,.01,focus).mode,'capture');
+  assert.equal(h.state.intent,'unload');
+  sensor.speedRatio=5.01;
+  assert.equal(h.updateRingState(sensor,.01,focus).mode,'capture');
 });
 
-test('ring state responds to acceleration trend, deceleration and gap guidance', () => {
-  const h = harness(), focus = {};
-  const sensor = {valid:true,speedRatio:1,speedClass:'cruise',speedTrend:'accelerating',acceleration:80,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
-  assert.equal(h.updateRingState(sensor,0,focus).mode,'capture');
+test('acceleration trend cannot cross the wall-speed boundary; gap guidance remains independent', () => {
+  const h=harness(),focus={},sensor={valid:true,speedRatio:4.99,speedClass:'fast',speedTrend:'accelerating',acceleration:80,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
+  assert.equal(h.updateRingState(sensor,0,focus).mode,'attack');
   sensor.speedTrend='decelerating';
-  assert.equal(h.updateRingState(sensor,.3,focus).mode,'attack');
+  assert.equal(h.updateRingState(sensor,.01,focus).mode,'attack');
+  sensor.speedRatio=5.01;sensor.speedTrend='decelerating';
+  assert.equal(h.updateRingState(sensor,.01,focus).mode,'capture');
   sensor.gapEta=.1;sensor.gapPassable=true;
   h.updateRingState(sensor,0,focus);
   assert.equal(h.state.intent,'guide-through');
@@ -191,18 +195,13 @@ test('inner contour and taper remain finite and smooth at gap tips', () => {
 });
 
 
-test('hysteresis keeps mode and intent coherent while high-risk wall windows can override it', () => {
-  const h = harness(), focus = {};
-  const sensor = {valid:true,speedRatio:1.8,speedClass:'extreme',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
-  h.updateRingState(sensor,0,focus);
-  sensor.speedRatio=.5;sensor.speedClass='slow';
-  const held = h.updateRingState(sensor,.01,focus);
-  assert.equal(held.mode,'capture');
-  assert.equal(held.intent,'unload');
-  sensor.nextWall='outer';sensor.etaOuter=.05;
-  const urgent = h.updateRingState(sensor,.01,focus);
-  assert.equal(urgent.mode,'attack');
-  assert.equal(urgent.priority,'high');
+test('wall strategy switches cleanly at the speed boundary without stale-mode hysteresis', () => {
+  const h=harness(),focus={},sensor={valid:true,speedRatio:5.1,speedClass:'extreme',speedTrend:'stable',acceleration:0,gapEta:null,gapPassable:false,nextWall:null,etaInner:null,etaOuter:null};
+  assert.equal(h.updateRingState(sensor,0,focus).mode,'capture');
+  sensor.speedRatio=4.9;sensor.speedClass='extreme';
+  const low=h.updateRingState(sensor,.01,focus);
+  assert.equal(low.mode,'attack');
+  assert.equal(low.intent,'boost');
 });
 
 test('sensor and state production functions do not write ball physics', () => {
@@ -229,6 +228,14 @@ test('inner wall soft contact dissipates speed while retaining a valid response'
   assert.equal(h.ringContact(o,o.x-2,o.y,true,p.x,p.x),true);
   assert.ok(Math.hypot(o.vx,o.vy)<before*.6,'inner wall should strongly dissipate normal energy');
   assert.ok(Number.isFinite(o.x)&&Number.isFinite(o.y)&&Number.isFinite(o.vx)&&Number.isFinite(o.vy));
+});
+
+
+test('outer aiming normals preserve the complete circular wall physics', () => {
+  const h=harness(),top=h.ringOuterAimNormal(-Math.PI/2),middle=h.ringOuterAimNormal(0),bottom=h.ringOuterAimNormal(Math.PI/2);
+  assert.ok(top.y<-.999&&Math.abs(top.x)<1e-9,'upper arc normal points upward');
+  assert.ok(middle.x>.999&&Math.abs(middle.y)<1e-9,'side midpoint normal is horizontal');
+  assert.ok(bottom.y>.999&&Math.abs(bottom.x)<1e-9,'lower arc normal points downward');
 });
 
 test('outer wall reflects and applies the bounded 1.045 speed gain', () => {
@@ -366,7 +373,7 @@ test('RingPlanner prioritizes survival, then gap guidance, capture, boost, and s
     gapPredictedX:null,etaInner:null,radialZone:'outside'};
   let p=h.planRingSkill(base,{intent:'boost'},focus);
   assert.equal(p.skill,'boost');
-  const fast={...base,speedRatio:1.4,speedClass:'fast',speedTrend:'stable',etaInner:.2};
+  const fast={...base,speedRatio:5,speedClass:'extreme',speedTrend:'stable',etaInner:null};
   assert.equal(h.planRingSkill(fast,{intent:'control'},focus).skill,'capture');
   const gap={...base,gapEta:.1,gapPassable:true,gapPredictedX:430};
   assert.equal(h.planRingSkill(gap,{intent:'guide-through'},focus).skill,'gap-guide');

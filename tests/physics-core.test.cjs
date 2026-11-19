@@ -272,6 +272,32 @@ test('PhysicsWorld rolls back integrated state when narrow phase rejects invalid
   assert.equal(world.stepCount,before.stepCount);
 });
 
+
+test('Contact collection deterministically sorts and deduplicates equivalent collider pairs', () => {
+  const ball=body(1), wall=body(Infinity);
+  ball.position={x:0,y:.5};
+  const circleA=createCollider(ball,'circle',{radius:1});
+  const circleB=createCollider(ball,'circle',{radius:1});
+  const planeA=createCollider(wall,'plane',{normal:{x:0,y:1},offset:0});
+  const planeB=createCollider(wall,'plane',{normal:{x:0,y:2},offset:0});
+  const result=detectContacts([circleA,circleB,planeA,planeB]);
+  assert.equal(result.valid,true);
+  assert.equal(result.contacts.length,1);
+  assert.equal(result.contacts[0].featureId,'circle-plane');
+  assert.deepEqual(result.contacts[0].normal,{x:0,y:1});
+});
+test('Contact collection produces repeatable order for a fixed collider registration order', () => {
+  const ball=body(1), wallA=body(Infinity), wallB=body(Infinity);
+  ball.position={x:.5,y:.5};
+  const colliders=[
+    createCollider(ball,'circle',{radius:1}),
+    createCollider(wallA,'plane',{normal:{x:1,y:0},offset:0}),
+    createCollider(wallB,'plane',{normal:{x:0,y:1},offset:0})
+  ];
+  const first=detectContacts(colliders), second=detectContacts(colliders);
+  assert.deepEqual(first.contacts.map(c=>[c.featureId,c.point.x,c.point.y]),second.contacts.map(c=>[c.featureId,c.point.x,c.point.y]));
+});
+
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {
   const b=body(2,{x:1,y:0}); b.position={x:0,y:0};
   assert.equal(applyForce(b,{x:4,y:0}),true);

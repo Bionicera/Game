@@ -79,7 +79,7 @@ function createContact({bodyA,bodyB,point,normal,penetration=0,toi=null,surfaceV
   return {
     valid:true,
     contact:{
-      bodyA,bodyB,point:{...point},normal:scale(normal,1/normalLength),penetration,toi,
+      bodyA,bodyB,point:{...point},normal:{x:normal.x===0?0:normal.x/normalLength,y:normal.y===0?0:normal.y/normalLength},penetration,toi,
       surfaceVelocity:{...surfaceVelocity},featureId,
       material:{restitution,friction}
     }

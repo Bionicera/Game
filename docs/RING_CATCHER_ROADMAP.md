@@ -657,7 +657,7 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] 增加 Contact 确定性排序/去重；同一 Body 对、feature、接触点与法线的重复结果会合并。
 - [x] PhysicsWorld 支持可配置 1–32 轮顺序冲量迭代，累计各轮冲量并在求解后单独做位置修正。
 - [x] 新增 Contact 集合与多接触角点测试；主线 `physics-core` Job 46/46 通过（run 44448597608）。
-- [ ] 实现 broad phase；当前仍为全量 Collider 配对检测。
+- [x] 实现 sweep-and-prune broad phase：按 AABB x 轴排序、活动集合裁剪并检查 y 轴重叠；Plane 作为无限边界参与候选，输出按 Collider 注册索引稳定排序。
 - [x] 实现 Circle-Plane、Circle-Segment、Circle-AABB、Circle-Circle TOI/CCD：覆盖线段侧面/圆端帽、AABB 四个面/圆角，以及双圆相对运动；按最早撞击时刻推进剩余时间。
 - [ ] 扩展 TOI/CCD 至运动学移动边界；当前 CCD 不处理运动学几何的平移扫掠。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
@@ -779,6 +779,14 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 
 
+
+
+### 2026-11-19 · P2 Sweep-and-Prune Broad Phase
+- 新增 colliderBounds，为 Circle/AABB/Segment 生成保守包围盒，Plane 作为无限范围边界；对非法/退化几何 fail-closed。
+- 新增 buildBroadPhasePairs：按 minX 排序，维护活动集合并进行 y 轴重叠裁剪；排除同 Body 与 static-static 对，最终按原 Collider 索引稳定排序。
+- detectContacts 改为只对 broad-phase 候选对执行窄相位，保留原有 Contact 稳定排序与去重。
+- 新增 4 项测试，覆盖几何包围盒、分离对象裁剪、Plane 候选、稳定顺序与非法几何。主线 physics-core Job 67/67 通过，Actions run [44450686297](https://github.com/Bionicera/Game/actions/runs/44450686297)。
+- broad phase 当前是保守 sweep-and-prune 原型；尚未加入动态树/网格、性能基准或大规模对象场景调优。生产循环仍未迁移。
 
 ### 2026-11-19 · P2 TOI/CCD 扩展（Circle–Circle）
 - 新增 sweepCircleCircle：基于两圆相对位置/相对速度求最早二次方程根，输出双圆 TOI、撞击中心、B→A 法线与接触点。

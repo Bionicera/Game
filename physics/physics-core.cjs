@@ -232,7 +232,31 @@ function detectContacts(colliders) {
       if(contact) contacts.push(contact);
     }
   }
-  return {valid:true,contacts};
+  const bodyOrder=new Map();
+  for (const collider of colliders) {
+    if (!bodyOrder.has(collider.body)) bodyOrder.set(collider.body,bodyOrder.size);
+  }
+  const compare=(a,b)=>{
+    return (bodyOrder.get(a.bodyA)-bodyOrder.get(b.bodyA)) ||
+      (bodyOrder.get(a.bodyB)-bodyOrder.get(b.bodyB)) ||
+      a.featureId.localeCompare(b.featureId) ||
+      (a.point.x-b.point.x) || (a.point.y-b.point.y) ||
+      (a.normal.x-b.normal.x) || (a.normal.y-b.normal.y);
+  };
+  contacts.sort(compare);
+  const unique=[];
+  for (const contact of contacts) {
+    const duplicate=unique.some(existing=>
+      existing.bodyA===contact.bodyA && existing.bodyB===contact.bodyB &&
+      existing.featureId===contact.featureId &&
+      Math.abs(existing.point.x-contact.point.x)<=EPSILON &&
+      Math.abs(existing.point.y-contact.point.y)<=EPSILON &&
+      Math.abs(existing.normal.x-contact.normal.x)<=EPSILON &&
+      Math.abs(existing.normal.y-contact.normal.y)<=EPSILON
+    );
+    if (!duplicate) unique.push(contact);
+  }
+  return {valid:true,contacts:unique};
 }
 
 function createContactTelemetry(bodyA,bodyB,contact,result,energyBefore) {

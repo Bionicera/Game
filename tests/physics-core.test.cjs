@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {sweepCirclePlane,sweepCircleSegment,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -579,4 +579,47 @@ test('PhysicsWorld CCD resolves a segment endpoint as a rounded cap', () => {
   assert.equal(result.contacts[0].featureId,'circle-segment-end-a');
   assert.ok(ball.velocity.x<0);
   assert.ok(ball.position.x<-.5);
+});
+
+
+test('sweepCircleAabb detects face TOI and rejects outside-face projections', () => {
+  const hit=sweepCircleAabb({position:{x:0,y:10},velocity:{x:0,y:-200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
+  assert.equal(hit.valid,true);
+  assert.ok(Math.abs(hit.hit.seconds-.06)<EPS);
+  assert.deepEqual(hit.hit.normal,{x:0,y:-1});
+  assert.deepEqual(hit.hit.point,{x:0,y:-1});
+  const miss=sweepCircleAabb({position:{x:5,y:10},velocity:{x:0,y:-200},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.1});
+  assert.equal(miss.hit,null);
+});
+test('sweepCircleAabb detects rounded corner impacts', () => {
+  const hit=sweepCircleAabb({position:{x:-5,y:-5},velocity:{x:100,y:100},radius:1,x:0,y:0,halfWidth:1,halfHeight:1,dt:.05});
+  assert.equal(hit.valid,true);
+  assert.equal(hit.hit.featureId,'circle-aabb-top-left');
+  assert.ok(Math.abs(Math.hypot(hit.hit.normal.x,hit.hit.normal.y)-1)<EPS);
+  assert.ok(Math.abs(Math.hypot(hit.hit.center.x+1,hit.hit.center.y+1)-1)<EPS);
+});
+test('PhysicsWorld CCD prevents fast circle tunneling through a static AABB face', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), box=body(Infinity);
+  ball.position={x:0,y:10};
+  world.addBody(ball); world.addBody(box);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(box,'aabb',{x:0,y:0,halfWidth:1,halfHeight:1},{restitution:1}));
+  const result=world.step(.1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.equal(result.contacts[0].featureId,'circle-aabb-top');
+  assert.ok(ball.position.y< -2);
+  assert.ok(ball.velocity.y>0);
+});
+test('PhysicsWorld CCD resolves rounded AABB corner impacts', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:100,y:100}), box=body(Infinity);
+  ball.position={x:-5,y:-5};
+  world.addBody(ball); world.addBody(box);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(box,'aabb',{x:0,y:0,halfWidth:1,halfHeight:1},{restitution:1}));
+  const result=world.step(.05);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.equal(result.contacts[0].featureId,'circle-aabb-top-left');
+  assert.ok(ball.velocity.x<0 && ball.velocity.y<0);
 });

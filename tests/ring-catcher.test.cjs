@@ -33,7 +33,7 @@ function extractFunction(name) {
 
 const productionFunctions = [
   'ringTipTaper', 'ringTipTaperSlope', 'ringInnerRadius', 'ringInnerRadiusSlope',
-  'ringAimMode', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringInnerSoftBounce', 'ringAutoPaddleVelocity', 'paddleCommandVelocity', 'ringContact', 'paddleReflect', 'bouncePaddle'
+  'ringAimMode', 'ringAimContactProjection', 'ringAimContactY', 'ringAimNormal', 'ringUsesInnerWall', 'ringOuterAimNormal', 'ringOuterAimPoint', 'ringOuterAimAngles', 'ringInnerAimPoint', 'ringInnerAimAngles', 'predictRingTrajectory', 'updateRingSensor', 'updateRingState', 'beginRingSling', 'beginRingSlingOnCapture', 'updateRingSling', 'tryReleaseRingSling', 'recordRingEvaluation', 'startRingCombo', 'advanceRingCombo', 'planRingSkill', 'updateRingPlanner', 'ringAimReflect', 'ringInnerSoftBounce', 'ringAutoPaddleVelocity', 'paddleCommandVelocity', 'ringContact', 'paddleReflect', 'bouncePaddle'
 ].map(extractFunction).join('\n');
 
 function harness() {
@@ -77,7 +77,7 @@ function harness() {
   vm.createContext(context);
   vm.runInContext(setup + productionFunctions + `
     globalThis.api={
-      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringInnerSoftBounce,ringAutoPaddleVelocity,ringAimMode,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
+      predictRingTrajectory,updateRingSensor,updateRingState,beginRingSling,updateRingSling,tryReleaseRingSling,recordRingEvaluation,startRingCombo,advanceRingCombo,planRingSkill,updateRingPlanner,ringAimReflect,ringInnerSoftBounce,ringAutoPaddleVelocity,ringAimMode,ringAimContactProjection,ringAimContactY,ringAimNormal,ringUsesInnerWall,ringOuterAimNormal,ringOuterAimPoint,ringOuterAimAngles,ringInnerAimPoint,ringInnerAimAngles,ringTipTaper,ringInnerRadius,ringInnerRadiusSlope,ringContact,
       get sensor(){return ringSensor},get state(){return ringState},get paddle(){return paddle},get ball(){return ball},
       get sling(){return ringSling},get planner(){return ringPlanner},get combo(){return ringCombo},get evaluator(){return ringEvaluator},set auto(v){autoPilot=v},set worldWidth(v){W=v},get worldWidth(){return W},set worldHeight(v){H=v},set aim(v){aimPlan=v},
       set level(v){levelNumber=v},set shape(v){shape=v},get shape(){return shape}
@@ -272,6 +272,33 @@ test('outer collision-point projections match the exact circular wall and reject
   }
   assert.equal(h.ringOuterAimPoint(-Math.PI/2,8),null,'the opening itself is not an outer wall point');
 });
+test('inner aim projection targets the real lower inner-wall angle instead of the top opening', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,r=8;
+  const point=h.ringAimContactProjection(0,r);
+  assert.ok(point&&point.mode==='capture');
+  assert.ok(point.angle>1.4&&point.angle<1.75,'centered capture should project to the lower inner-wall arc');
+  assert.ok(point.center.y>0,'inner contact center must lie below the ring center');
+  assert.ok(Math.abs(h.ringAimContactY(0,r)-(cy+point.center.y))<1e-9);
+  assert.ok(Math.abs(h.ringAimNormal(0,r).y-point.normal.y)<1e-9);
+});
+
+test('outer aim projection feeds the same collision-point geometry into contact height and normal', () => {
+  const h=harness(),p=h.paddle,R=p.w*.47,cy=p.y+p.h-R,r=8,rel=.5;
+  const point=h.ringAimContactProjection(rel,r);
+  assert.ok(point&&point.mode==='attack');
+  assert.ok(point.center.y<0,'outer attack projection should meet the upper outer arc');
+  assert.ok(Math.abs(point.center.x-rel*R)<1e-6);
+  assert.ok(Math.abs(h.ringAimContactY(rel,r)-(cy+point.center.y))<1e-9);
+  assert.ok(Math.abs(h.ringAimNormal(rel,r).x-point.normal.x)<1e-9);
+});
+
+test('multi-hit attack prediction consumes the dual-projection contact point', () => {
+  const fn=extractFunction('predictAttackPath');
+  assert.ok(fn.includes('ringAimContactProjection(rel,r)'));
+  assert.ok(fn.includes('projection.center.x'));
+  assert.ok(fn.includes('projection.normal'));
+});
+
 test('planAim evaluates inner capture candidates by projected wall angle, not a guessed top contact height', () => {
   const source=extractFunction('planAim');
   assert.match(source,/ringInnerAimAngles\(144\)/);

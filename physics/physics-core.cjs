@@ -27,14 +27,18 @@ function createBody(mass, velocity={x:0,y:0}, surfaceVelocity={x:0,y:0}) {
 
 function applyForce(body, force) {
   if (!body || body.invMass === 0 || !isFiniteVector(force)) return false;
-  body.force = add(body.force,force);
-  return isFiniteVector(body.force);
+  const nextForce = add(body.force,force);
+  if (!isFiniteVector(nextForce)) return false;
+  body.force = nextForce;
+  return true;
 }
 
 function applyImpulse(body, impulse) {
   if (!body || body.invMass === 0 || !isFiniteVector(impulse)) return false;
-  body.velocity = add(body.velocity,scale(impulse,body.invMass));
-  return isFiniteVector(body.velocity);
+  const nextVelocity = add(body.velocity,scale(impulse,body.invMass));
+  if (!isFiniteVector(nextVelocity)) return false;
+  body.velocity = nextVelocity;
+  return true;
 }
 
 // Semi-implicit Euler: update velocity from accumulated force, then position.

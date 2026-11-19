@@ -712,3 +712,23 @@ test('broad phase fails closed when collider geometry is corrupted', () => {
   assert.equal(result.valid,false);
   assert.equal(result.reason,'invalid-collider');
 });
+
+
+test('swept broad phase includes fast circles whose paths cross finite colliders', () => {
+  const ball=body(1,{x:200,y:0}), wall=body(Infinity);
+  ball.position={x:-10,y:0};
+  const colliders=[
+    createCollider(ball,'circle',{radius:1}),
+    createCollider(wall,'segment',{a:{x:0,y:-2},b:{x:0,y:2}})
+  ];
+  assert.deepEqual(buildBroadPhasePairs(colliders).pairs,[]);
+  assert.deepEqual(buildBroadPhasePairs(colliders,{sweepDt:.1}).pairs,[[0,1]]);
+});
+test('swept broad phase covers both moving circles and rejects invalid sweep dt', () => {
+  const a=body(1,{x:100,y:0}), b=body(1,{x:-100,y:0});
+  a.position={x:-10,y:0}; b.position={x:10,y:0};
+  const colliders=[createCollider(a,'circle',{radius:1}),createCollider(b,'circle',{radius:1})];
+  assert.deepEqual(buildBroadPhasePairs(colliders).pairs,[]);
+  assert.deepEqual(buildBroadPhasePairs(colliders,{sweepDt:.1}).pairs,[[0,1]]);
+  assert.equal(buildBroadPhasePairs(colliders,{sweepDt:-1}).valid,false);
+});

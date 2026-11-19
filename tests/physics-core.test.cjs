@@ -599,7 +599,7 @@ test('sweepCircleAabb detects rounded corner impacts', () => {
   assert.ok(Math.abs(Math.hypot(hit.hit.center.x+1,hit.hit.center.y+1)-1)<EPS);
 });
 test('PhysicsWorld CCD prevents fast circle tunneling through a static AABB face', () => {
-  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-200}), box=body(Infinity);
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:200}), box=body(Infinity);
   ball.position={x:0,y:-10};
   world.addBody(ball); world.addBody(box);
   world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
@@ -609,7 +609,7 @@ test('PhysicsWorld CCD prevents fast circle tunneling through a static AABB face
   assert.equal(result.ccdEventCount,1);
   assert.equal(result.contacts[0].featureId,'circle-aabb-top');
   assert.ok(ball.position.y< -2);
-  assert.ok(ball.velocity.y>0);
+  assert.ok(ball.velocity.y<0);
 });
 test('PhysicsWorld CCD resolves rounded AABB corner impacts', () => {
   const world=new PhysicsWorld(), ball=body(1,{x:100,y:100}), box=body(Infinity);

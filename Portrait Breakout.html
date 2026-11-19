@@ -1384,7 +1384,8 @@
       const cx=prevX+(o.x-prevX)*f-px,cy=prevY+(o.y-prevY)*f;
       const hits=[arcHit(cx,cy,R,'outer'),innerHit(cx,cy)];
       for(const hit of hits){
-        const approaching=(o.vx-paddle.vx)*hit.n.x+o.vy*hit.n.y<-.01;
+        const wallVx=hit.kind==='inner'?clamp(paddle.vx,-baseSpeed()*.4,baseSpeed()*.4):paddle.vx;
+        const approaching=(o.vx-wallVx)*hit.n.x+o.vy*hit.n.y<-.01;
         if(hit.signed>=-.35&&hit.dist<=o.r+.35&&approaching&&(!contact||hit.dist<contact.dist))contact={...hit,f};
       }
       if(contact)break;

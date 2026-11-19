@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact} = require('../physics/physics-core.cjs');
+const {createBody,applyForce,applyImpulse,integrateBody,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -146,4 +146,101 @@ test('overflowing force and impulse requests are rejected atomically', () => {
   assert.equal(applyForce(b,{x:Number.MAX_VALUE,y:0}),true);
   assert.equal(applyForce(b,{x:Number.MAX_VALUE,y:0}),false);
   assert.deepEqual(b.force,{x:Number.MAX_VALUE,y:0});
+});
+
+
+test('PhysicsWorld owns an ordered body registry and rejects duplicate identity', () => {
+  const world=new PhysicsWorld(), a=body(1), b=body(2);
+  assert.equal(world.addBody(a).valid,true);
+  assert.equal(world.addBody(b).valid,true);
+  assert.equal(world.addBody(a).reason,'body-already-registered');
+  assert.equal(world.bodies[0],a);
+  assert.equal(world.removeBody(a),true);
+  assert.equal(world.removeBody(a),false);
+  assert.deepEqual(world.bodies,[b]);
+});
+
+test('PhysicsWorld advances multiple bodies deterministically in one world step', () => {
+  const makeWorld=()=>{
+    const world=new PhysicsWorld(), a=body(1,{x:1,y:0}), b=body(2,{x:0,y:2});
+    world.addBody(a); world.addBody(b);
+    world.addForceGenerator((item)=>({x:2*item.mass,y:0}));
+    return {world,a,b};
+  };
+  const x=makeWorld(), y=makeWorld();
+  assert.equal(x.world.step(.5).valid,true);
+  assert.equal(y.world.step(.5).valid,true);
+  assert.deepEqual(x.a.position,y.a.position);
+  assert.deepEqual(x.b.velocity,y.b.velocity);
+  assert.deepEqual(x.a.position,{x:1.5,y:0});
+  assert.deepEqual(x.b.position,{x:.25,y:1});
+});
+
+test('FixedStepRunner accumulates fractional frames and runs only fixed steps', () => {
+  const world=new PhysicsWorld(), b=body(1,{x:1,y:0}); world.addBody(b);
+  const runner=new FixedStepRunner(world,{fixedDt:.1,maxSubSteps:4});
+  assert.equal(runner.advance(.04).steps,0);
+  assert.equal(runner.advance(.07).steps,1);
+  assert.ok(Math.abs(b.position.x-.1)<EPS);
+  assert.ok(Math.abs(runner.accumulator-.01)<EPS);
+});
+
+test('catch-up cap retains and reports backlog instead of dropping simulation time', () => {
+  const world=new PhysicsWorld(), runner=new FixedStepRunner(world,{fixedDt:.1,maxSubSteps:2});
+  const result=runner.advance(.55);
+  assert.equal(result.steps,2);
+  assert.ok(Math.abs(result.backlogSeconds-.35)<EPS);
+  const next=runner.advance(0);
+  assert.equal(next.steps,2);
+  assert.ok(Math.abs(next.backlogSeconds-.15)<EPS);
+});
+
+test('paused runner does not accumulate time; reset explicitly clears backlog', () => {
+  const world=new PhysicsWorld(), runner=new FixedStepRunner(world,{fixedDt:.1});
+  runner.advance(.05);
+  runner.setPaused(true);
+  assert.equal(runner.advance(10).backlogSeconds,.05);
+  runner.setPaused(false);
+  assert.equal(runner.reset().accumulator,0);
+});
+
+test('force generators are unique, ordered, and invalid output rolls back force state', () => {
+  const world=new PhysicsWorld(), b=body(1); world.addBody(b);
+  const gravity=()=>({x:0,y:10});
+  assert.equal(world.addForceGenerator(gravity).valid,true);
+  assert.equal(world.addForceGenerator(gravity).reason,'force-generator-already-registered');
+  assert.equal(world.addForceGenerator(()=>({x:Infinity,y:0})).valid,true);
+  const result=world.step(.1);
+  assert.equal(result.valid,false);
+  assert.deepEqual(b.force,{x:0,y:0});
+  assert.deepEqual(b.position,{x:0,y:0});
+  assert.equal(world.stepCount,0);
+});
+
+test('failed world step is atomic across bodies and does not leak references in status', () => {
+  const world=new PhysicsWorld(), a=body(1), b=body(1);
+  world.addBody(a); world.addBody(b); b.position.x=Number.MAX_VALUE; b.velocity.x=Number.MAX_VALUE;
+  const result=world.step(2);
+  assert.equal(result.valid,false);
+  assert.deepEqual(a.position,{x:0,y:0});
+  assert.deepEqual(a.velocity,{x:0,y:0});
+  assert.equal(Object.hasOwn(result,'body'),false);
+});
+
+test('kinematic bodies remain unchanged while dynamic bodies advance', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:2,y:0}), paddle=body(Infinity,{x:3,y:4},{x:5,y:6});
+  world.addBody(ball); world.addBody(paddle);
+  assert.equal(world.step(.5).valid,true);
+  assert.deepEqual(paddle.position,{x:0,y:0});
+  assert.deepEqual(paddle.velocity,{x:3,y:4});
+  assert.deepEqual(paddle.surfaceVelocity,{x:5,y:6});
+  assert.deepEqual(ball.position,{x:1,y:0});
+});
+
+test('invalid frame and world time steps fail closed without advancing state', () => {
+  const world=new PhysicsWorld(), b=body(1,{x:1,y:0}); world.addBody(b);
+  const runner=new FixedStepRunner(world,{fixedDt:.1});
+  assert.equal(runner.advance(Infinity).valid,false);
+  assert.equal(world.step(NaN).valid,false);
+  assert.deepEqual(b.position,{x:0,y:0});
 });

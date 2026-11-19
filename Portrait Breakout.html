@@ -1333,7 +1333,7 @@
     const before=Math.max(0,Number.isFinite(speedBefore)?speedBefore:Math.hypot(vx,vy));
     const ceiling=Math.max(floor,before*.985),raw=Math.hypot(outX,outY),target=clamp(raw,floor,ceiling);
     if(raw>1e-9){const k=target/raw;outX*=k;outY*=k;}
-    else{const source=Math.hypot(vx,vy)||1;outX=vx/source*target;outY=vy/source*target;}
+    else{outX=nx*target;outY=ny*target;}
     return {vx:outX,vy:outY,speed:target};
   }
 

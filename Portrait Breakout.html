@@ -1720,7 +1720,7 @@
       }
       const want=candidateX-paddle.w/2-offset;
       if(Math.abs(clamp(want,2,W-paddle.w-2)-want)>1)continue;
-      const Ux=paddleCommandVelocity(want,paddle.x);
+      const Ux=isRing&&autoPilot?ringAutoPaddleVelocity(want,paddle.x):paddleCommandVelocity(want,paddle.x);
       const out=isRing?ringAimReflect(focus.vx,focus.vy,rel,Ux,r,normalOverride,forcedMode):paddleReflect(focus.vx,focus.vy,rel,Ux);
       const ang=Math.atan2(out.vx,-out.vy);
       if(Math.abs(ang)>1.25)continue;
@@ -2036,7 +2036,7 @@
     } else if(state === 'playing' && aimPlan && aimPlan.brick && !aimPlan.brick.alive){
       // 多球时目标砖常被辅球先打掉：只换目标、不改接球点，挡板不会突然横跳
       const keepRel=aimPlan.rel,offset=shape==='ring'?ringAimOffset(keepRel):keepRel*paddle.w/2;
-      const want=(lastLandX||focus.x)-paddle.w/2-offset,Ux=paddleCommandVelocity(want,paddle.x);
+      const want=(lastLandX||focus.x)-paddle.w/2-offset,Ux=shape==='ring'&&autoPilot?ringAutoPaddleVelocity(want,paddle.x):paddleCommandVelocity(want,paddle.x);
       const out=shape==='ring'?ringAimReflect(focus.vx,focus.vy,keepRel,Ux,r):paddleReflect(focus.vx,focus.vy,keepRel,Ux);
       const ang=Math.atan2(out.vx,-out.vy);
       const aimY=shape==='ring'?ringAimContactY(keepRel,r):surfaceY(clamp((keepRel+1)/2,0,1));

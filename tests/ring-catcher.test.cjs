@@ -317,7 +317,7 @@ test('moving paddle cannot turn an inner soft catch into an energy injection', (
   const R=p.w*.47,cy=p.y+p.h-R,ri=h.ringInnerRadius(Math.PI),r=8;
   const o={x:p.x+p.w/2-ri+r+.5,y:cy,vx:-300,vy:0,r};
   const before=Math.hypot(o.vx,o.vy);
-  assert.equal(h.ringContact(o,o.x+5,o.y,true,p.x,p.x),'true'===false?false:true,
+  assert.equal(h.ringContact(o,o.x+5,o.y,true,p.x,p.x),true,
     'the moving inner wall must register the swept contact');
   const after=Math.hypot(o.vx,o.vy);
   assert.ok(after<=Math.max(before*.985,300*.22)+1e-6,

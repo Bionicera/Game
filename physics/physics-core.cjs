@@ -318,33 +318,54 @@ function solveContact(bodyA, bodyB, normal, material={}) {
  */
 class PhysicsWorld {
   constructor() {
-    this.bodies = [];
-    this.bodySet = new Set();
-    this.forceGenerators = [];
-    this.forceGeneratorSet = new Set();
-    this.stepCount = 0;
+    this.bodies=[];
+    this.bodySet=new Set();
+    this.colliders=[];
+    this.colliderSet=new Set();
+    this.forceGenerators=[];
+    this.forceGeneratorSet=new Set();
+    this.stepCount=0;
   }
 
   addBody(body) {
-    if (!body || !Number.isFinite(body.invMass) || !isFiniteVector(body.position) ||
-        !isFiniteVector(body.velocity) || !isFiniteVector(body.force)) {
-      return {valid:false,reason:'invalid-body'};
-    }
+    if (!body || !Number.isFinite(body.invMass) || body.invMass<0 ||
+        !(body.mass>0 || body.mass===Infinity) || !isFiniteVector(body.position) ||
+        !isFiniteVector(body.velocity) || !isFiniteVector(body.force) ||
+        !isFiniteVector(body.surfaceVelocity)) return {valid:false,reason:'invalid-body'};
     if (this.bodySet.has(body)) return {valid:false,reason:'body-already-registered'};
     this.bodySet.add(body);
     this.bodies.push(body);
     return {valid:true,body};
   }
 
+  addCollider(collider) {
+    if (!collider || !this.bodySet.has(collider.body) ||
+        !['circle','plane','aabb','segment'].includes(collider.shape)) {
+      return {valid:false,reason:'invalid-collider'};
+    }
+    if (this.colliderSet.has(collider)) return {valid:false,reason:'collider-already-registered'};
+    this.colliderSet.add(collider);
+    this.colliders.push(collider);
+    return {valid:true,collider};
+  }
+
+  removeCollider(collider) {
+    if (!this.colliderSet.has(collider)) return false;
+    this.colliderSet.delete(collider);
+    this.colliders.splice(this.colliders.indexOf(collider),1);
+    return true;
+  }
+
   removeBody(body) {
     if (!this.bodySet.has(body)) return false;
+    for (const collider of this.colliders.filter(item=>item.body===body)) this.removeCollider(collider);
     this.bodySet.delete(body);
     this.bodies.splice(this.bodies.indexOf(body),1);
     return true;
   }
 
   addForceGenerator(generator) {
-    if (typeof generator !== 'function') return {valid:false,reason:'invalid-force-generator'};
+    if (typeof generator!=='function') return {valid:false,reason:'invalid-force-generator'};
     if (this.forceGeneratorSet.has(generator)) return {valid:false,reason:'force-generator-already-registered'};
     this.forceGeneratorSet.add(generator);
     this.forceGenerators.push(generator);
@@ -358,44 +379,68 @@ class PhysicsWorld {
     return true;
   }
 
-  step(dt) {
-    if (!(dt > 0) || !Number.isFinite(dt)) return {valid:false,reason:'invalid-world-dt'};
-    const forceSnapshots = this.bodies.map(body => ({body,force:{...body.force}}));
+  step(dt,{positionCorrection=.8,positionSlop=.01}={}) {
+    if (!(dt>0) || !Number.isFinite(dt) ||
+        !Number.isFinite(positionCorrection) || positionCorrection<0 || positionCorrection>1 ||
+        !Number.isFinite(positionSlop) || positionSlop<0) {
+      return {valid:false,reason:'invalid-world-step-options'};
+    }
+    const snapshots=this.bodies.map(body=>({
+      body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}
+    }));
+    const rollback=()=>{
+      for (const snapshot of snapshots) {
+        snapshot.body.position=snapshot.position;
+        snapshot.body.velocity=snapshot.velocity;
+        snapshot.body.force=snapshot.force;
+      }
+    };
+
     for (const body of this.bodies) {
-      if (body.invMass === 0) continue;
+      if (body.invMass===0) continue;
       for (const generator of this.forceGenerators) {
         let force;
-        try { force = generator(body,dt,this); }
-        catch (_) {
-          for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
-          return {valid:false,reason:'force-generator-threw'};
-        }
-        if (force == null) continue;
-        if (!applyForce(body,force)) {
-          for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
-          return {valid:false,reason:'invalid-generated-force'};
-        }
+        try { force=generator(body,dt,this); }
+        catch (_) { rollback(); return {valid:false,reason:'force-generator-threw'}; }
+        if (force==null) continue;
+        if (!applyForce(body,force)) { rollback(); return {valid:false,reason:'invalid-generated-force'}; }
       }
     }
 
-    // Preflight every body on copies so a bad body cannot partially advance the world.
-    const results = [];
     for (const body of this.bodies) {
-      if (body.invMass === 0) { results.push(null); continue; }
-      const candidate = {...body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}};
-      const result = integrateBody(candidate,dt);
-      if (!result.valid) {
-        for (const snapshot of forceSnapshots) snapshot.body.force = snapshot.force;
-        return {valid:false,reason:result.reason};
-      }
-      results.push({position:candidate.position,velocity:candidate.velocity,force:candidate.force});
+      if (body.invMass===0) continue;
+      const candidate={...body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}};
+      const result=integrateBody(candidate,dt);
+      if (!result.valid) { rollback(); return {valid:false,reason:result.reason}; }
+      body.position=candidate.position;
+      body.velocity=candidate.velocity;
+      body.force=candidate.force;
     }
-    for (let i=0;i<this.bodies.length;i++) {
-      if (!results[i]) continue;
-      Object.assign(this.bodies[i],results[i]);
+
+    const detected=detectContacts(this.colliders);
+    if (!detected.valid) { rollback(); return detected; }
+    for (const contact of detected.contacts) {
+      const solved=solveContact(contact.bodyA,contact.bodyB,contact.normal,contact.material);
+      if (!solved.valid) { rollback(); return {valid:false,reason:'contact-solver-failed',featureId:contact.featureId}; }
+      const inverseMassSum=contact.bodyA.invMass+contact.bodyB.invMass;
+      const correction=Math.max(contact.penetration-positionSlop,0)*positionCorrection/inverseMassSum;
+      if (!Number.isFinite(correction)) { rollback(); return {valid:false,reason:'invalid-position-correction'}; }
+      if (correction>0) {
+        contact.bodyA.position=add(contact.bodyA.position,scale(contact.normal,correction*contact.bodyA.invMass));
+        contact.bodyB.position=subtract(contact.bodyB.position,scale(contact.normal,correction*contact.bodyB.invMass));
+        if (!isFiniteVector(contact.bodyA.position) || !isFiniteVector(contact.bodyB.position)) {
+          rollback();
+          return {valid:false,reason:'non-finite-position-correction'};
+        }
+      }
+      contact.normalImpulse=solved.normalImpulse||0;
+      contact.tangentImpulse=solved.tangentImpulse||0;
     }
     this.stepCount++;
-    return {valid:true,stepCount:this.stepCount,bodyCount:this.bodies.length};
+    return {
+      valid:true,stepCount:this.stepCount,bodyCount:this.bodies.length,
+      colliderCount:this.colliders.length,contactCount:detected.contacts.length,contacts:detected.contacts
+    };
   }
 }
 

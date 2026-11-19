@@ -2,7 +2,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const EPS = 1e-10;
-const {createBody,applyForce,applyImpulse,integrateBody,createContact,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
+const {createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner} = require('../physics/physics-core.cjs');
 const add = (a,b) => ({x:a.x+b.x,y:a.y+b.y});
 const sub = (a,b) => ({x:a.x-b.x,y:a.y-b.y});
 const body = createBody;
@@ -125,6 +125,35 @@ test('Contact contract rejects aliased bodies and invalid material coefficients'
   assert.equal(createContact({...base,bodyB:a}).reason,'invalid-contact-bodies');
   assert.equal(createContact({...base,material:{restitution:1.2}}).reason,'invalid-contact-material');
   assert.equal(createContact({...base,material:{friction:-.1}}).reason,'invalid-contact-material');
+});
+
+
+test('Collider factory normalizes plane geometry and preserves supported shapes', () => {
+  const b=body(Infinity);
+  const circle=createCollider(b,'circle',{radius:3});
+  const plane=createCollider(b,'plane',{normal:{x:0,y:4},offset:8});
+  const aabb=createCollider(b,'aabb',{x:5,y:6,halfWidth:2,halfHeight:3});
+  const segment=createCollider(b,'segment',{a:{x:0,y:1},b:{x:4,y:1}});
+  assert.equal(circle.geometry.radius,3);
+  assert.deepEqual(plane.geometry,{normal:{x:0,y:1},offset:2});
+  assert.deepEqual(aabb.geometry,{x:5,y:6,halfWidth:2,halfHeight:3});
+  assert.deepEqual(segment.geometry,{a:{x:0,y:1},b:{x:4,y:1}});
+});
+test('Collider factory rejects invalid shapes, degenerate geometry and material', () => {
+  const b=body(Infinity);
+  assert.throws(()=>createCollider(b,'capsule',{}),/unsupported collider shape/);
+  assert.throws(()=>createCollider(b,'circle',{radius:0}),/radius/);
+  assert.throws(()=>createCollider(b,'plane',{normal:{x:0,y:0},offset:0}),/plane/);
+  assert.throws(()=>createCollider(b,'aabb',{x:0,y:0,halfWidth:1,halfHeight:0}),/aabb/);
+  assert.throws(()=>createCollider(b,'segment',{a:{x:1,y:1},b:{x:1,y:1}}),/segment/);
+  assert.throws(()=>createCollider(b,'circle',{radius:1},{restitution:2}),/material/);
+});
+test('Collider factory snapshots geometry and material input values', () => {
+  const b=body(Infinity), geometry={a:{x:0,y:0},b:{x:2,y:0}}, material={restitution:.5,friction:.2};
+  const c=createCollider(b,'segment',geometry,material);
+  geometry.a.x=99; material.friction=99;
+  assert.deepEqual(c.geometry.a,{x:0,y:0});
+  assert.equal(c.material.friction,.2);
 });
 
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {

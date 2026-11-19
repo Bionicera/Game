@@ -97,6 +97,36 @@ test('normal orientation is scale-invariant and normalized internally', () => {
   assert.equal(a.velocity.x,-4);
 });
 
+
+test('Contact contract normalizes B-to-A normal and preserves geometric fields', () => {
+  const a=body(1), b=body(Infinity);
+  const result=createContact({bodyA:a,bodyB:b,point:{x:3,y:4},normal:{x:0,y:5},penetration:.25,toi:.5,surfaceVelocity:{x:2,y:1},featureId:'wall-face',material:{restitution:.4,friction:.2}});
+  assert.equal(result.valid,true);
+  assert.deepEqual(result.contact.normal,{x:0,y:1});
+  assert.deepEqual(result.contact.point,{x:3,y:4});
+  assert.equal(result.contact.penetration,.25);
+  assert.equal(result.contact.toi,.5);
+  assert.deepEqual(result.contact.surfaceVelocity,{x:2,y:1});
+  assert.deepEqual(result.contact.material,{restitution:.4,friction:.2});
+});
+test('Contact contract rejects degenerate normals and invalid vectors', () => {
+  const a=body(1), b=body(Infinity);
+  assert.equal(createContact({bodyA:a,bodyB:b,point:{x:0,y:0},normal:{x:0,y:0},featureId:'x'}).reason,'degenerate-contact-normal');
+  assert.equal(createContact({bodyA:a,bodyB:b,point:{x:NaN,y:0},normal:{x:1,y:0},featureId:'x'}).reason,'invalid-contact-vectors');
+});
+test('Contact contract rejects negative penetration and out-of-range TOI', () => {
+  const a=body(1), b=body(Infinity), base={bodyA:a,bodyB:b,point:{x:0,y:0},normal:{x:1,y:0},featureId:'x'};
+  assert.equal(createContact({...base,penetration:-.1}).reason,'invalid-contact-penetration');
+  assert.equal(createContact({...base,toi:1.1}).reason,'invalid-contact-toi');
+  assert.equal(createContact({...base,toi:NaN}).reason,'invalid-contact-toi');
+});
+test('Contact contract rejects aliased bodies and invalid material coefficients', () => {
+  const a=body(1), b=body(Infinity), base={bodyA:a,bodyB:b,point:{x:0,y:0},normal:{x:1,y:0},featureId:'x'};
+  assert.equal(createContact({...base,bodyB:a}).reason,'invalid-contact-bodies');
+  assert.equal(createContact({...base,material:{restitution:1.2}}).reason,'invalid-contact-material');
+  assert.equal(createContact({...base,material:{friction:-.1}}).reason,'invalid-contact-material');
+});
+
 test('force integration uses semi-implicit Euler and clears accumulated force', () => {
   const b=body(2,{x:1,y:0}); b.position={x:0,y:0};
   assert.equal(applyForce(b,{x:4,y:0}),true);

@@ -323,6 +323,39 @@ function sweepCircleAabb({position,velocity,radius,x,y,halfWidth,halfHeight,dt}=
   return {valid:true,hit:candidates[0]||null};
 }
 
+function sweepCircleCircle({positionA,velocityA,radiusA,positionB,velocityB,radiusB,dt}={}) {
+  if (!isFiniteVector(positionA) || !isFiniteVector(velocityA) ||
+      !isFiniteVector(positionB) || !isFiniteVector(velocityB) ||
+      ![radiusA,radiusB,dt].every(Number.isFinite) || !(radiusA>0) || !(radiusB>0) || !(dt>0)) {
+    return {valid:false,reason:'invalid-sweep-input',hit:null};
+  }
+  const relativePosition=subtract(positionA,positionB);
+  const relativeVelocity=subtract(velocityA,velocityB);
+  const combinedRadius=radiusA+radiusB;
+  const distance=Math.hypot(relativePosition.x,relativePosition.y);
+  if (distance<combinedRadius-EPSILON) return {valid:true,hit:null};
+  const speedSquared=dot(relativeVelocity,relativeVelocity);
+  if (speedSquared<EPSILON) return {valid:true,hit:null};
+  const qb=2*dot(relativePosition,relativeVelocity);
+  if (qb>=0) return {valid:true,hit:null};
+  const qc=dot(relativePosition,relativePosition)-combinedRadius*combinedRadius;
+  const discriminant=qb*qb-4*speedSquared*qc;
+  if (discriminant<0) return {valid:true,hit:null};
+  const seconds=(-qb-Math.sqrt(discriminant))/(2*speedSquared);
+  if (seconds<-EPSILON || seconds>dt+EPSILON) return {valid:true,hit:null};
+  const time=Math.max(0,Math.min(dt,seconds));
+  const centerA=add(positionA,scale(velocityA,time));
+  const centerB=add(positionB,scale(velocityB,time));
+  const delta=subtract(centerA,centerB), length=Math.hypot(delta.x,delta.y);
+  if (length<EPSILON) return {valid:true,hit:null};
+  const normal=scale(delta,1/length);
+  if (dot(relativeVelocity,normal)>=-EPSILON) return {valid:true,hit:null};
+  return {valid:true,hit:{
+    seconds:time,toi:time/dt,center:centerA,centerA,centerB,
+    point:add(centerB,scale(normal,radiusB)),normal,featureId:'circle-circle'
+  }};
+}
+
 function detectContacts(colliders) {
   if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',contacts:[]};
   const contacts=[];
@@ -576,15 +609,28 @@ class PhysicsWorld {
       let earliest=null;
       for (const circle of this.colliders) {
         if (circle.shape!=='circle' || circle.body.invMass===0) continue;
-        for (const other of this.colliders) {
-          if (!['plane','segment','aabb'].includes(other.shape) || other.body===circle.body ||
-              other.body.invMass!==0 || other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0) continue;
+        for (let otherIndex=0;otherIndex<this.colliders.length;otherIndex++) {
+          const other=this.colliders[otherIndex];
+          if (other.body===circle.body) continue;
           const input={position:circle.body.position,velocity:circle.body.velocity,radius:circle.geometry.radius,dt:remaining};
-          const hit=other.shape==='plane'
-            ? sweepCirclePlane({...input,normal:other.geometry.normal,offset:other.geometry.offset})
-            : other.shape==='segment'
-              ? sweepCircleSegment({...input,a:other.geometry.a,b:other.geometry.b})
-              : sweepCircleAabb({...input,...other.geometry});
+          let hit;
+          if (other.shape==='circle') {
+            if (otherIndex<=this.colliders.indexOf(circle) ||
+                (other.body.invMass===0 && (other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0)) ||
+                (other.body.invMass===0 && circle.body.invMass===0)) continue;
+            hit=sweepCircleCircle({
+              positionA:circle.body.position,velocityA:circle.body.velocity,radiusA:circle.geometry.radius,
+              positionB:other.body.position,velocityB:other.body.velocity,radiusB:other.geometry.radius,dt:remaining
+            });
+          } else {
+            if (!['plane','segment','aabb'].includes(other.shape) ||
+                other.body.invMass!==0 || other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0) continue;
+            hit=other.shape==='plane'
+              ? sweepCirclePlane({...input,normal:other.geometry.normal,offset:other.geometry.offset})
+              : other.shape==='segment'
+                ? sweepCircleSegment({...input,a:other.geometry.a,b:other.geometry.b})
+                : sweepCircleAabb({...input,...other.geometry});
+          }
           if (!hit.valid) { rollback(); return hit; }
           if (hit.hit && (!earliest || hit.hit.seconds<earliest.hit.seconds)) earliest={circle,other,hit:hit.hit};
         }
@@ -603,7 +649,8 @@ class PhysicsWorld {
         body.position=add(body.position,scale(body.velocity,advance));
         if (!isFiniteVector(body.position)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
       }
-      earliest.circle.body.position={...earliest.hit.center};
+      earliest.circle.body.position={...(earliest.hit.centerA||earliest.hit.center)};
+      if (earliest.hit.centerB) earliest.other.body.position={...earliest.hit.centerB};
       const contactResult=createContact({
         bodyA:earliest.circle.body,bodyB:earliest.other.body,
         point:earliest.hit.point,normal:earliest.hit.normal,penetration:0,
@@ -706,4 +753,4 @@ class FixedStepRunner {
   }
 }
 
-module.exports = {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};
+module.exports = {sweepCirclePlane,sweepCircleSegment,sweepCircleAabb,sweepCircleCircle,createBody,applyForce,applyImpulse,integrateBody,createContact,createCollider,detectContacts,createContactTelemetry,kineticEnergy,linearMomentum,solveContact,PhysicsWorld,FixedStepRunner};

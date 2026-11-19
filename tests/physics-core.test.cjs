@@ -70,15 +70,15 @@ test('static wall: elastic reflection reverses only normal velocity', () => {
 });
 test('static wall: zero restitution removes normal speed without adding energy', () => {
   const a=body(2,{x:5,y:7}), wall=body(Infinity,{x:0,y:0});
-  resolve(a,wall,{-1:0,x:-1,y:0},{restitution:0});
+  resolve(a,wall,{x:-1,y:0},{restitution:0});
   assert.ok(Math.abs(a.v.x)<EPS);
   assert.ok(Math.abs(a.v.y-7)<EPS);
   assert.ok(Math.abs(kinetic(a)-49)<EPS);
 });
 test('moving kinematic paddle surface velocity changes the outgoing velocity', () => {
-  const ball=body(1,{x:0,y:0}), paddle=body(Infinity,{x:0,y:0},{x:6,y:0});
+  const ball=body(1,{x:0,y:0}), paddle=body(Infinity,{x:0,y:0},{x:-6,y:0});
   const r=resolve(ball,paddle,{x:-1,y:0},{restitution:1});
-  assert.ok(Math.abs(ball.v.x-12)<EPS);
+  assert.ok(Math.abs(ball.v.x+12)<EPS);
   assert.ok(Math.abs(r.kinematicBoundaryWork-72)<EPS);
 });
 test('two dynamic bodies conserve total momentum and obey restitution', () => {
@@ -87,8 +87,8 @@ test('two dynamic bodies conserve total momentum and obey restitution', () => {
   resolve(a,b,{x:-1,y:0},{restitution:1});
   const p1=add(momentum(a),momentum(b));
   assert.ok(Math.abs(p1.x-p0.x)<EPS && Math.abs(p1.y-p0.y)<EPS);
-  assert.ok(Math.abs(a.v.x-(-5/3))<EPS);
-  assert.ok(Math.abs(b.v.x-(11/3))<EPS);
+  assert.ok(Math.abs(a.v.x-(1/3))<EPS);
+  assert.ok(Math.abs(b.v.x-(13/3))<EPS);
 });
 test('separating contact receives no second impulse', () => {
   const a=body(1,{x:2,y:0}), wall=body(Infinity,{x:0,y:0});

@@ -658,6 +658,7 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - [x] PhysicsWorld 支持可配置 1–32 轮顺序冲量迭代，累计各轮冲量并在求解后单独做位置修正。
 - [x] 新增 Contact 集合与多接触角点测试；主线 `physics-core` Job 46/46 通过（run 44448597608）。
 - [x] 实现 sweep-and-prune broad phase：按 AABB x 轴排序、活动集合裁剪并检查 y 轴重叠；Plane 作为无限边界参与候选，输出按 Collider 注册索引稳定排序。
+- [x] CCD 使用 swept broad-phase bounds：动态 Circle 的包围盒覆盖本次剩余时间的起点与预计终点，避免高速对象在离散起点包围盒之外被漏筛。
 - [x] 实现 Circle-Plane、Circle-Segment、Circle-AABB、Circle-Circle TOI/CCD：覆盖线段侧面/圆端帽、AABB 四个面/圆角，以及双圆相对运动；按最早撞击时刻推进剩余时间。
 - [ ] 扩展 TOI/CCD 至运动学移动边界；当前 CCD 不处理运动学几何的平移扫掠。
 - [ ] 建立生产对照实验，确认固定步长与追赶上限；1/120s 仍只是默认实验值。
@@ -780,6 +781,13 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 
 
 
+
+
+### 2026-11-19 · P2 Swept Broad Phase for CCD
+- broad-phase pair builder 增加 sweepDt：动态 Circle 包围盒取当前位置与按当前速度预测的剩余步末位置之并集；静态 Collider 使用原始包围盒，Plane 仍为无限范围。
+- PhysicsWorld 每次寻找下一 TOI 前重建 swept candidate pairs，仅对候选 Circle–Plane/Segment/AABB/Circle 执行连续检测；避免为每个动态球遍历全部 Collider。
+- 新增 2 项测试，证明起点不重叠但扫掠路径相交的 Segment/双圆仍会进入候选集，并验证非法 sweepDt 拒绝。主线 physics-core Job 69/69 通过，Actions run [44450874466](https://github.com/Bionicera/Game/actions/runs/44450874466)。
+- 当前 broad phase 仍是 sweep-and-prune 原型，最坏情形（大量无限 Plane 或高度重叠对象）仍可能退化；尚未做大规模性能基准。生产循环未迁移。
 
 ### 2026-11-19 · P2 Sweep-and-Prune Broad Phase
 - 新增 colliderBounds，为 Circle/AABB/Segment 生成保守包围盒，Plane 作为无限范围边界；对非法/退化几何 fail-closed。

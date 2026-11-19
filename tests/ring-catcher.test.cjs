@@ -41,7 +41,7 @@ function harness() {
     Math, Number, Object, Infinity,
     clamp: (v, lo, hi) => Math.max(lo, Math.min(hi, v)),
     shape: 'ring', state:'playing', W:800, H:844, time:0, autoPilot:false, aimPlan:null, levelNumber:1,
-    ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,releaseTimer:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
+    ringSling:{phase:'idle',focus:null,anchorX:0,targetX:0,dashDir:1,exitSide:-1,cyclesTarget:1,halfSwings:0,amplitude:0,dashStartX:0,dashDistance:0,dashProgress:0,cooldown:0,phaseTime:0,lastCycles:0,lastAngle:0,abortReason:''},
     paddle: { x: 100, y: 500, w: 200, h: 20, vx: 0 },
     ball: { r: 8 },
     hitFx: null,
@@ -868,4 +868,14 @@ test('RingSling cancels a dash whose clamped target has no forward travel', () =
   h.updateRingSling(.016,focus);
   assert.equal(h.sling.phase,'cooldown','a boundary-clamped zero-length dash must cancel');
   assert.equal(h.sling.abortReason,'边界行程不足');
+});
+
+test('RingSling release wait uses the phase timeout as its single clock', () => {
+  const h=harness();h.auto=true;h.sensor.valid=true;
+  const focus={x:200,y:420,vx:100,vy:0,r:8};
+  h.sling.phase='release';h.sling.focus=focus;h.sling.phaseTime=.47;
+  h.updateRingSling(.02,focus);
+  assert.equal(h.sling.phase,'cooldown','the release phase timeout should cancel into cooldown');
+  assert.equal(h.sling.cooldown,.45);
+  assert.equal(h.sling.focus,null);
 });

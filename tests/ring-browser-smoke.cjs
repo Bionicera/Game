@@ -29,7 +29,7 @@ const { chromium } = require('playwright');
       const base={valid:true,speedRatio:.5,speedClass:'slow',speedTrend:'stable',gapEta:null,
         gapPassable:false,gapPredictedX:null,etaInner:null,radialZone:'outside'};
       const boost=planRingSkill(base,{intent:'boost'},focus).skill;
-      const capture=planRingSkill({...base,speedRatio:1.4,speedClass:'fast',etaInner:.2},{intent:'control'},focus).skill;
+      const capture=planRingSkill({...base,speedRatio:5.4,speedClass:'extreme',etaInner:.2},{intent:'control'},focus).skill;
       const gap=planRingSkill({...base,gapEta:.1,gapPassable:true,gapPredictedX:focus.x+20},{intent:'guide-through'},focus).skill;
       const guide=planRingSkill({...base,speedRatio:1,speedClass:'cruise',radialZone:'inside'},{intent:'aim'},focus).skill;
       const danger={...focus,y:paddle.y+paddle.h-30,vy:200};

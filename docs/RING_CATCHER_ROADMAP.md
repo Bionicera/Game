@@ -861,3 +861,11 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - 新增 `FixedStepRunner`：可配置固定 dt / 最大子步；追赶上限后的积压时间明确保留，暂停不累计时间，重置策略显式。
 - 新增 9 项测试；本轮不改生产 HTML、不接入生产循环。
 - 当前仍缺碰撞检测、Contact 集合、TOI/CCD、位置修正和多接触迭代；不宣称完整 PhysicsWorld 碰撞管线完成。
+
+
+### 2026-11-20 · P2 · 运动学移动边界 TOI（首轮实现，待 CI）
+- 目标：让动态圆球对运动学 Plane / Segment / AABB / Circle 使用相对运动计算 TOI，避免把有速度的运动边界当成静态几何跳过。
+- 改动：独立内核加入运动学有限几何 swept bounds、边界几何随 Body 平移、World 在 TOI 事件时间同步推进运动学 Body，并在回滚时恢复边界几何；运动学做功账本计入 Body 平移速度与附加 surfaceVelocity。
+- 测试：新增平移 Plane、AABB、Circle 三个端到端 World CCD 场景；结果待 GitHub Actions。
+- 未触碰：生产 HTML、圆环生产逻辑、游戏玩法、发布/部署。
+- 下一步：CI 通过后补齐 Segment / 多边界同时事件 / 运动学回滚；再评估旋转边界是否明确排除在 P2。

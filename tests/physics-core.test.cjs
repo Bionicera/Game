@@ -748,3 +748,50 @@ test('PhysicsWorld CCD resolves simultaneous orthogonal plane impacts at one TOI
   assert.ok(Math.abs(ball.position.x-12)<1e-7);
   assert.ok(Math.abs(ball.position.y-12)<1e-7);
 });
+
+
+test('PhysicsWorld CCD resolves a translating kinematic plane using relative motion and boundary work', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-10}), planeBody=body(Infinity,{x:0,y:2});
+  ball.position={x:0,y:5};
+  world.addBody(ball); world.addBody(planeBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const plane=createCollider(planeBody,'plane',{normal:{x:0,y:1},offset:0},{restitution:1});
+  world.addCollider(plane);
+  const result=world.step(1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(ball.position.y-11)<EPS);
+  assert.ok(Math.abs(planeBody.position.y-2)<EPS);
+  assert.ok(Math.abs(plane.geometry.offset-2)<EPS);
+});
+
+test('PhysicsWorld swept broad phase and CCD include a translating kinematic AABB', () => {
+  const world=new PhysicsWorld(), ball=body(1), boxBody=body(Infinity,{x:-3,y:0});
+  ball.position={x:-5,y:0};
+  world.addBody(ball); world.addBody(boxBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const box=createCollider(boxBody,'aabb',{x:0,y:0,halfWidth:1,halfHeight:2},{restitution:1});
+  world.addCollider(box);
+  const result=world.step(2);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.x+6)<EPS);
+  assert.ok(Math.abs(ball.position.x+9.2)<1e-8);
+  assert.ok(Math.abs(boxBody.position.x+6)<EPS);
+  assert.ok(Math.abs(box.geometry.x+6)<EPS);
+});
+
+test('PhysicsWorld CCD resolves a moving kinematic circle without treating it as static', () => {
+  const world=new PhysicsWorld(), ball=body(1), target=body(Infinity,{x:-2,y:0});
+  ball.position={x:0,y:0}; target.position={x:5,y:0};
+  world.addBody(ball); world.addBody(target);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(target,'circle',{radius:1},{restitution:1}));
+  const result=world.step(2);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.x+4)<EPS);
+  assert.ok(Math.abs(ball.position.x+2)<EPS);
+  assert.ok(Math.abs(target.position.x-2)<EPS);
+});

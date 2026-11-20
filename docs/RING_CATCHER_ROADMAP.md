@@ -880,5 +880,5 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 ### 2026-11-20 · P2 · 运动学边界回滚与验证范围
 - 增加运动学 Segment 端到端 TOI、平移边界做功以及 CCD 事件上限触发后的几何/Body 原子回滚测试；最新测试总数为 76 项，Actions run `44693577789` 的 physics-core Job 76/76 通过。
 - `docs/PHYSICS_CONSTITUTION.md` 增补第 14 节，明确 `body.velocity` 驱动几何平移，`surfaceVelocity` 作为额外接触表面速度；当前明确不支持旋转、角速度或加速度边界轨迹。
-- 已验证的中间 CI：`physics-core` 73/73（run `44693426139`）、75/75（run `44693509949`）；后续新增 Segment / work / rollback 三项后的完整工作流 run `44693577789` 四个 Job 均成功：physics-core 76/76、ring-catcher 85/85、Chromium 30 秒 Auto smoke 通过；第一关基准 Job 成功执行但实际仍为 0/6 通关、2 次重开、4 次超时。
+- 已验证的中间 CI：`physics-core` 73/73（run `44693426139`）、75/75（run `44693509949`）；后续新增 Segment / work / rollback 三项后的完整工作流 run `44693577789` 四个 Job 均成功：physics-core 76/76、ring-catcher 85/85、Chromium 30 秒 Auto smoke 通过；第一关基准 Job 成功执行但实际仍为 0/6 通关、2 次重开、4 次超时；六个样本的 `slingStats.releases` 均为 0。
 - 生产 HTML 与生产物理路径保持未修改；本分支是隔离验证 PR，未合并、未部署。

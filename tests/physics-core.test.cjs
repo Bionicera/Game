@@ -452,11 +452,11 @@ test('failed world step is atomic across bodies and does not leak references in 
   assert.equal(Object.hasOwn(result,'body'),false);
 });
 
-test('kinematic bodies remain unchanged while dynamic bodies advance', () => {
+test('kinematic bodies advance with their prescribed velocity while dynamic bodies advance', () => {
   const world=new PhysicsWorld(), ball=body(1,{x:2,y:0}), paddle=body(Infinity,{x:3,y:4},{x:5,y:6});
   world.addBody(ball); world.addBody(paddle);
   assert.equal(world.step(.5).valid,true);
-  assert.deepEqual(paddle.position,{x:0,y:0});
+  assert.deepEqual(paddle.position,{x:1.5,y:2});
   assert.deepEqual(paddle.velocity,{x:3,y:4});
   assert.deepEqual(paddle.surfaceVelocity,{x:5,y:6});
   assert.deepEqual(ball.position,{x:1,y:0});
@@ -793,5 +793,5 @@ test('PhysicsWorld CCD resolves a moving kinematic circle without treating it as
   assert.equal(result.ccdEventCount,1);
   assert.ok(Math.abs(ball.velocity.x+4)<EPS);
   assert.ok(Math.abs(ball.position.x+2)<EPS);
-  assert.ok(Math.abs(target.position.x-2)<EPS);
+  assert.ok(Math.abs(target.position.x-1)<EPS);
 });

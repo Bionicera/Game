@@ -376,6 +376,28 @@ function colliderBounds(collider) {
   return {minX:-Infinity,maxX:Infinity,minY:-Infinity,maxY:Infinity};
 }
 
+function cloneColliderGeometry(geometry={}) {
+  return {...geometry,
+    normal:geometry.normal?{...geometry.normal}:geometry.normal,
+    a:geometry.a?{...geometry.a}:geometry.a,
+    b:geometry.b?{...geometry.b}:geometry.b
+  };
+}
+
+function translateColliderGeometry(collider, displacement) {
+  const geometry=cloneColliderGeometry(collider.geometry);
+  if (collider.shape==='plane') {
+    geometry.offset+=dot(geometry.normal,displacement);
+  } else if (collider.shape==='aabb') {
+    geometry.x+=displacement.x;
+    geometry.y+=displacement.y;
+  } else if (collider.shape==='segment') {
+    geometry.a=add(geometry.a,displacement);
+    geometry.b=add(geometry.b,displacement);
+  }
+  return geometry;
+}
+
 function buildBroadPhasePairs(colliders,{sweepDt=0}={}) {
   if (!(sweepDt>=0) || !Number.isFinite(sweepDt)) return {valid:false,reason:'invalid-broad-phase-dt',pairs:[]};
   if (!Array.isArray(colliders)) return {valid:false,reason:'invalid-collider-list',pairs:[]};
@@ -384,12 +406,20 @@ function buildBroadPhasePairs(colliders,{sweepDt=0}={}) {
     const collider=colliders[i];
     const bounds=colliderBounds(collider);
     if (!bounds) return {valid:false,reason:'invalid-collider',pairs:[]};
-    if (sweepDt>0 && collider.shape==='circle' && collider.body.invMass>0) {
+    if (sweepDt>0 && collider.shape==='circle') {
       const end=add(collider.body.position,scale(collider.body.velocity,sweepDt));
       if (!isFiniteVector(end)) return {valid:false,reason:'invalid-swept-bounds',pairs:[]};
       const r=collider.geometry.radius;
       bounds.minX=Math.min(bounds.minX,end.x-r); bounds.maxX=Math.max(bounds.maxX,end.x+r);
       bounds.minY=Math.min(bounds.minY,end.y-r); bounds.maxY=Math.max(bounds.maxY,end.y+r);
+    } else if (sweepDt>0 && collider.body.invMass===0 &&
+        (collider.shape==='aabb' || collider.shape==='segment') &&
+        (collider.body.velocity.x!==0 || collider.body.velocity.y!==0)) {
+      const displacement=scale(collider.body.velocity,sweepDt);
+      const endBounds=colliderBounds({...collider,geometry:translateColliderGeometry(collider,displacement)});
+      if (!endBounds) return {valid:false,reason:'invalid-swept-bounds',pairs:[]};
+      bounds.minX=Math.min(bounds.minX,endBounds.minX); bounds.maxX=Math.max(bounds.maxX,endBounds.maxX);
+      bounds.minY=Math.min(bounds.minY,endBounds.minY); bounds.maxY=Math.max(bounds.maxY,endBounds.maxY);
     }
     entries.push({index:i,...bounds});
   }
@@ -529,8 +559,8 @@ function solveContact(bodyA, bodyB, normal, material={}) {
   bodyA.velocity = add(bodyA.velocity,scale(impulse,bodyA.invMass));
   bodyB.velocity = subtract(bodyB.velocity,scale(impulse,bodyB.invMass));
 
-  const kinematicWork = bodyB.invMass===0 ? dot(impulse,bodyB.surfaceVelocity) :
-    bodyA.invMass===0 ? -dot(impulse,bodyA.surfaceVelocity) : 0;
+  const kinematicWork = bodyB.invMass===0 ? dot(impulse,add(bodyB.velocity,bodyB.surfaceVelocity)) :
+    bodyA.invMass===0 ? -dot(impulse,add(bodyA.velocity,bodyA.surfaceVelocity)) : 0;
 
   return {
     valid:true,applied:true,normal:n,tangent,relativeVelocity,normalSpeed,tangentSpeed,
@@ -618,12 +648,35 @@ class PhysicsWorld {
     const snapshots=this.bodies.map(body=>({
       body,position:{...body.position},velocity:{...body.velocity},force:{...body.force}
     }));
+    const colliderSnapshots=this.colliders.map(collider=>({
+      collider,geometry:cloneColliderGeometry(collider.geometry)
+    }));
     const rollback=()=>{
       for (const snapshot of snapshots) {
         snapshot.body.position=snapshot.position;
         snapshot.body.velocity=snapshot.velocity;
         snapshot.body.force=snapshot.force;
       }
+      for (const snapshot of colliderSnapshots) snapshot.collider.geometry=cloneColliderGeometry(snapshot.geometry);
+    };
+    const advanceWorld=seconds=>{
+      if (!(seconds>=0) || !Number.isFinite(seconds)) return false;
+      for (const body of this.bodies) {
+        const displacement=scale(body.velocity,seconds);
+        if (!isFiniteVector(displacement)) return false;
+        if (displacement.x!==0 || displacement.y!==0) {
+          body.position=add(body.position,displacement);
+          if (!isFiniteVector(body.position)) return false;
+          if (body.invMass===0) {
+            for (const collider of this.colliders) {
+              if (collider.body===body && collider.shape!=='circle') {
+                collider.geometry=translateColliderGeometry(collider,displacement);
+              }
+            }
+          }
+        }
+      }
+      return true;
     };
 
     for (const body of this.bodies) {
@@ -664,43 +717,41 @@ class PhysicsWorld {
         else if (b.shape==='circle' && b.body.invMass>0) { circle=b; other=a; }
         else continue;
         if (other.body===circle.body) continue;
-        const input={position:circle.body.position,velocity:circle.body.velocity,radius:circle.geometry.radius,dt:remaining};
+        const relativeVelocity=subtract(circle.body.velocity,other.body.velocity);
+        const input={position:circle.body.position,velocity:relativeVelocity,radius:circle.geometry.radius,dt:remaining};
         let hit;
         if (other.shape==='circle') {
-          if (other.body.invMass===0 && (other.body.velocity.x!==0 || other.body.velocity.y!==0 ||
-              other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0)) continue;
           if (other.body.invMass===0 && circle.body.invMass===0) continue;
           hit=sweepCircleCircle({
             positionA:circle.body.position,velocityA:circle.body.velocity,radiusA:circle.geometry.radius,
             positionB:other.body.position,velocityB:other.body.velocity,radiusB:other.geometry.radius,dt:remaining
           });
         } else {
-          if (!['plane','segment','aabb'].includes(other.shape) || other.body.invMass!==0 ||
-              other.body.velocity.x!==0 || other.body.velocity.y!==0 ||
-              other.body.surfaceVelocity.x!==0 || other.body.surfaceVelocity.y!==0) continue;
+          if (!['plane','segment','aabb'].includes(other.shape) || other.body.invMass!==0) continue;
           hit=other.shape==='plane'
             ? sweepCirclePlane({...input,normal:other.geometry.normal,offset:other.geometry.offset})
             : other.shape==='segment'
               ? sweepCircleSegment({...input,a:other.geometry.a,b:other.geometry.b})
               : sweepCircleAabb({...input,...other.geometry});
+          if (hit.valid && hit.hit) {
+            const boundaryDisplacement=scale(other.body.velocity,hit.hit.seconds);
+            hit.hit={...hit.hit,
+              center:add(hit.hit.center,boundaryDisplacement),
+              point:add(hit.hit.point,boundaryDisplacement)
+            };
+          }
         }
         if (!hit.valid) { rollback(); return hit; }
         if (hit.hit && (!earliest || hit.hit.seconds<earliest.hit.seconds)) earliest={circle,other,hit:hit.hit};
       }
       if (!earliest) {
-        for (const body of this.bodies) if (body.invMass!==0) {
-          body.position=add(body.position,scale(body.velocity,remaining));
-          if (!isFiniteVector(body.position)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
-        }
+        if (!advanceWorld(remaining)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
         elapsed+=remaining; remaining=0;
         break;
       }
       if (ccdEvents>=16) { rollback(); return {valid:false,reason:'ccd-event-limit'}; }
       const advance=earliest.hit.seconds;
-      for (const body of this.bodies) if (body.invMass!==0) {
-        body.position=add(body.position,scale(body.velocity,advance));
-        if (!isFiniteVector(body.position)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
-      }
+      if (!advanceWorld(advance)) { rollback(); return {valid:false,reason:'non-finite-integration-result'}; }
       earliest.circle.body.position={...(earliest.hit.centerA||earliest.hit.center)};
       if (earliest.hit.centerB) earliest.other.body.position={...earliest.hit.centerB};
       const contactResult=createContact({

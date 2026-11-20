@@ -861,3 +861,24 @@ Telemetry        动量、能量、碰撞事件、数值异常与可复现实验
 - 新增 `FixedStepRunner`：可配置固定 dt / 最大子步；追赶上限后的积压时间明确保留，暂停不累计时间，重置策略显式。
 - 新增 9 项测试；本轮不改生产 HTML、不接入生产循环。
 - 当前仍缺碰撞检测、Contact 集合、TOI/CCD、位置修正和多接触迭代；不宣称完整 PhysicsWorld 碰撞管线完成。
+
+
+### 2026-11-20 · P2 · 运动学移动边界 TOI（首轮实现，待 CI）
+- 目标：让动态圆球对运动学 Plane / Segment / AABB / Circle 使用相对运动计算 TOI，避免把有速度的运动边界当成静态几何跳过。
+- 改动：独立内核加入运动学有限几何 swept bounds、边界几何随 Body 平移、World 在 TOI 事件时间同步推进运动学 Body，并在回滚时恢复边界几何；运动学做功账本计入 Body 平移速度与附加 surfaceVelocity。
+- 测试：新增平移 Plane、AABB、Circle 三个端到端 World CCD 场景；结果待 GitHub Actions。
+- 未触碰：生产 HTML、圆环生产逻辑、游戏玩法、发布/部署。
+- 下一步：CI 通过后补齐 Segment / 多边界同时事件 / 运动学回滚；再评估旋转边界是否明确排除在 P2。
+
+
+### 2026-11-20 · P2 · 运动学 TOI 测试扩展
+- 在首轮回归中发现原有“运动学 Body 不移动”的测试契约与新世界时间线所有权冲突；已更新为运动学 Body 按预设线速度推进，速度本身仍不受冲量修改。
+- 首轮 PR CI 曾失败：失败项为旧契约断言与两个新场景的期望值；按日志修正后，最新已完成的 `physics-core` Job 为 73/73 通过（run `44693426139` 对应提交 `eae06017`）。
+- 随后补入 Segment 平移 TOI 与运动学平移做功解析回归；新增两项后的完整工作流正在重新执行，结果待确认。
+
+
+### 2026-11-20 · P2 · 运动学边界回滚与验证范围
+- 增加运动学 Segment 端到端 TOI、平移边界做功以及 CCD 事件上限触发后的几何/Body 原子回滚测试；最新测试总数为 76 项，Actions run `44693577789` 的 physics-core Job 76/76 通过。
+- `docs/PHYSICS_CONSTITUTION.md` 增补第 14 节，明确 `body.velocity` 驱动几何平移，`surfaceVelocity` 作为额外接触表面速度；当前明确不支持旋转、角速度或加速度边界轨迹。
+- 已验证的中间 CI：`physics-core` 73/73（run `44693426139`）、75/75（run `44693509949`）；后续新增 Segment / work / rollback 三项后的完整工作流 run `44693577789` 四个 Job 均成功：physics-core 76/76、ring-catcher 85/85、Chromium 30 秒 Auto smoke 通过；第一关基准 Job 成功执行但实际仍为 0/6 通关、2 次重开、4 次超时；六个样本的 `slingStats.releases` 均为 0。
+- 生产 HTML 与生产物理路径保持未修改；本分支是隔离验证 PR，未合并、未部署。

@@ -452,11 +452,11 @@ test('failed world step is atomic across bodies and does not leak references in 
   assert.equal(Object.hasOwn(result,'body'),false);
 });
 
-test('kinematic bodies remain unchanged while dynamic bodies advance', () => {
+test('kinematic bodies advance with their prescribed velocity while dynamic bodies advance', () => {
   const world=new PhysicsWorld(), ball=body(1,{x:2,y:0}), paddle=body(Infinity,{x:3,y:4},{x:5,y:6});
   world.addBody(ball); world.addBody(paddle);
   assert.equal(world.step(.5).valid,true);
-  assert.deepEqual(paddle.position,{x:0,y:0});
+  assert.deepEqual(paddle.position,{x:1.5,y:2});
   assert.deepEqual(paddle.velocity,{x:3,y:4});
   assert.deepEqual(paddle.surfaceVelocity,{x:5,y:6});
   assert.deepEqual(ball.position,{x:1,y:0});
@@ -747,4 +747,98 @@ test('PhysicsWorld CCD resolves simultaneous orthogonal plane impacts at one TOI
   assert.ok(ball.velocity.x>0 && ball.velocity.y>0);
   assert.ok(Math.abs(ball.position.x-12)<1e-7);
   assert.ok(Math.abs(ball.position.y-12)<1e-7);
+});
+
+
+test('PhysicsWorld CCD resolves a translating kinematic plane using relative motion and boundary work', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-10}), planeBody=body(Infinity,{x:0,y:2});
+  ball.position={x:0,y:5};
+  world.addBody(ball); world.addBody(planeBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const plane=createCollider(planeBody,'plane',{normal:{x:0,y:1},offset:0},{restitution:1});
+  world.addCollider(plane);
+  const result=world.step(1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(ball.position.y-11)<EPS);
+  assert.ok(Math.abs(planeBody.position.y-2)<EPS);
+  assert.ok(Math.abs(plane.geometry.offset-2)<EPS);
+});
+
+test('PhysicsWorld swept broad phase and CCD include a translating kinematic AABB', () => {
+  const world=new PhysicsWorld(), ball=body(1), boxBody=body(Infinity,{x:-3,y:0});
+  ball.position={x:-5,y:0};
+  world.addBody(ball); world.addBody(boxBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const box=createCollider(boxBody,'aabb',{x:0,y:0,halfWidth:1,halfHeight:2},{restitution:1});
+  world.addCollider(box);
+  const result=world.step(2);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.x+6)<EPS);
+  assert.ok(Math.abs(ball.position.x+11)<1e-8);
+  assert.ok(Math.abs(boxBody.position.x+6)<EPS);
+  assert.ok(Math.abs(box.geometry.x+6)<EPS);
+});
+
+test('PhysicsWorld CCD resolves a moving kinematic circle without treating it as static', () => {
+  const world=new PhysicsWorld(), ball=body(1), target=body(Infinity,{x:-2,y:0});
+  ball.position={x:0,y:0}; target.position={x:5,y:0};
+  world.addBody(ball); world.addBody(target);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  world.addCollider(createCollider(target,'circle',{radius:1},{restitution:1}));
+  const result=world.step(2);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.x+4)<EPS);
+  assert.ok(Math.abs(ball.position.x+2)<EPS);
+  assert.ok(Math.abs(target.position.x-1)<EPS);
+});
+
+
+test('PhysicsWorld swept broad phase and CCD include a translating kinematic Segment', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-10}), segmentBody=body(Infinity,{x:0,y:2});
+  ball.position={x:0,y:5};
+  world.addBody(ball); world.addBody(segmentBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const segment=createCollider(segmentBody,'segment',{a:{x:-5,y:0},b:{x:5,y:0}},{restitution:1});
+  world.addCollider(segment);
+  const result=world.step(1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(ball.position.y-11)<EPS);
+  assert.ok(Math.abs(segmentBody.position.y-2)<EPS);
+  assert.ok(Math.abs(segment.geometry.a.y-2)<EPS);
+  assert.ok(Math.abs(segment.geometry.b.y-2)<EPS);
+});
+
+test('kinematic work includes the translating boundary velocity', () => {
+  const ball=body(1,{x:0,y:-10}), paddle=body(Infinity,{x:0,y:2});
+  const result=solveContact(ball,paddle,{x:0,y:1},{restitution:1});
+  assert.equal(result.valid,true);
+  assert.equal(result.applied,true);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(result.kinematicWork-48)<EPS);
+});
+
+
+test('PhysicsWorld rolls back moving kinematic geometry when the CCD event budget is exhausted', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:1000}), lower=body(Infinity), upper=body(Infinity,{x:0,y:.1});
+  ball.position={x:0,y:1};
+  world.addBody(ball); world.addBody(lower); world.addBody(upper);
+  world.addCollider(createCollider(ball,'circle',{radius:.1}));
+  world.addCollider(createCollider(lower,'plane',{normal:{x:0,y:1},offset:0}));
+  const upperPlane=createCollider(upper,'plane',{normal:{x:0,y:-1},offset:-2});
+  world.addCollider(upperPlane);
+  const before={ballPosition:{...ball.position},ballVelocity:{...ball.velocity},
+    upperPosition:{...upper.position},upperOffset:upperPlane.geometry.offset};
+  const result=world.step(.1);
+  assert.equal(result.valid,false);
+  assert.equal(result.reason,'ccd-event-limit');
+  assert.deepEqual(ball.position,before.ballPosition);
+  assert.deepEqual(ball.velocity,before.ballVelocity);
+  assert.deepEqual(upper.position,before.upperPosition);
+  assert.equal(upperPlane.geometry.offset,before.upperOffset);
 });

@@ -795,3 +795,30 @@ test('PhysicsWorld CCD resolves a moving kinematic circle without treating it as
   assert.ok(Math.abs(ball.position.x+2)<EPS);
   assert.ok(Math.abs(target.position.x-1)<EPS);
 });
+
+
+test('PhysicsWorld swept broad phase and CCD include a translating kinematic Segment', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:-10}), segmentBody=body(Infinity,{x:0,y:2});
+  ball.position={x:0,y:5};
+  world.addBody(ball); world.addBody(segmentBody);
+  world.addCollider(createCollider(ball,'circle',{radius:1},{restitution:1}));
+  const segment=createCollider(segmentBody,'segment',{a:{x:-5,y:0},b:{x:5,y:0}},{restitution:1});
+  world.addCollider(segment);
+  const result=world.step(1);
+  assert.equal(result.valid,true);
+  assert.equal(result.ccdEventCount,1);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(ball.position.y-11)<EPS);
+  assert.ok(Math.abs(segmentBody.position.y-2)<EPS);
+  assert.ok(Math.abs(segment.geometry.a.y-2)<EPS);
+  assert.ok(Math.abs(segment.geometry.b.y-2)<EPS);
+});
+
+test('kinematic work includes the translating boundary velocity', () => {
+  const ball=body(1,{x:0,y:-10}), paddle=body(Infinity,{x:0,y:2});
+  const result=solveContact(ball,paddle,{x:0,y:1},{restitution:1});
+  assert.equal(result.valid,true);
+  assert.equal(result.applied,true);
+  assert.ok(Math.abs(ball.velocity.y-14)<EPS);
+  assert.ok(Math.abs(result.kinematicWork-48)<EPS);
+});

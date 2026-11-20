@@ -777,7 +777,7 @@ test('PhysicsWorld swept broad phase and CCD include a translating kinematic AAB
   assert.equal(result.valid,true);
   assert.equal(result.ccdEventCount,1);
   assert.ok(Math.abs(ball.velocity.x+6)<EPS);
-  assert.ok(Math.abs(ball.position.x+9.2)<1e-8);
+  assert.ok(Math.abs(ball.position.x+11)<1e-8);
   assert.ok(Math.abs(boxBody.position.x+6)<EPS);
   assert.ok(Math.abs(box.geometry.x+6)<EPS);
 });

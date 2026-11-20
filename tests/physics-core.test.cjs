@@ -822,3 +822,23 @@ test('kinematic work includes the translating boundary velocity', () => {
   assert.ok(Math.abs(ball.velocity.y-14)<EPS);
   assert.ok(Math.abs(result.kinematicWork-48)<EPS);
 });
+
+
+test('PhysicsWorld rolls back moving kinematic geometry when the CCD event budget is exhausted', () => {
+  const world=new PhysicsWorld(), ball=body(1,{x:0,y:1000}), lower=body(Infinity), upper=body(Infinity,{x:0,y:.1});
+  ball.position={x:0,y:1};
+  world.addBody(ball); world.addBody(lower); world.addBody(upper);
+  world.addCollider(createCollider(ball,'circle',{radius:.1}));
+  world.addCollider(createCollider(lower,'plane',{normal:{x:0,y:1},offset:0}));
+  const upperPlane=createCollider(upper,'plane',{normal:{x:0,y:-1},offset:-2});
+  world.addCollider(upperPlane);
+  const before={ballPosition:{...ball.position},ballVelocity:{...ball.velocity},
+    upperPosition:{...upper.position},upperOffset:upperPlane.geometry.offset};
+  const result=world.step(.1);
+  assert.equal(result.valid,false);
+  assert.equal(result.reason,'ccd-event-limit');
+  assert.deepEqual(ball.position,before.ballPosition);
+  assert.deepEqual(ball.velocity,before.ballVelocity);
+  assert.deepEqual(upper.position,before.upperPosition);
+  assert.equal(upperPlane.geometry.offset,before.upperOffset);
+});
